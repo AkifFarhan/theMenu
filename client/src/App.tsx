@@ -4,6 +4,7 @@ import Home from './views/Home';
 import Inventory from './views/Inventory';
 import AddFood from './views/AddFood';
 import Recipes from './views/Recipes';
+import Profile from './views/Profile';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './index.css';
 import { Toaster } from 'react-hot-toast';
@@ -25,6 +26,7 @@ function App() {
           <Route path={'/add-food'} element={<AddFood />} />
           <Route path={'/recipes'} element={<Recipes />} />
           <Route path={'/sessions'} element={<Sessions />} />
+          <Route path={'/profile'} element={<Profile />} />
         </Route>
       </Routes>
       <Toaster
