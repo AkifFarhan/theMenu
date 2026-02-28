@@ -1,0 +1,29 @@
+.add-food-wrapper {
+  padding-top: 80px;
+}
+
+.add-food-form {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.add-food-form h5 {
+  margin-bottom: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.add-food-confirm {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.total-cost {
+  font-weight: 600;
+  font-size: 15px;
+  color: #111827;
+}
