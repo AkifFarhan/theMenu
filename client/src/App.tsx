@@ -1,6 +1,9 @@
 import { Outlet, Route, Routes } from 'react-router';
 import BaseLayout from './views/BaseLayout';
 import Home from './views/Home';
+import Inventory from './views/Inventory';
+import AddFood from './views/AddFood';
+import Recipes from './views/Recipes';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './index.css';
 import { Toaster } from 'react-hot-toast';
@@ -18,6 +21,9 @@ function App() {
           }
         >
           <Route path={'/'} element={<Home />} />
+          <Route path={'/inventory'} element={<Inventory />} />
+          <Route path={'/add-food'} element={<AddFood />} />
+          <Route path={'/recipes'} element={<Recipes />} />
           <Route path={'/sessions'} element={<Sessions />} />
         </Route>
       </Routes>
