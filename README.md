@@ -44,8 +44,9 @@ php artisan key:generate
 **Option A: MySQL (Recommended for Production)**
 
 1. Create a MySQL database:
-```sql
-CREATE DATABASE smart_recipe;
+```bash
+Create a database named 'themenu'
+Copy the queries from 001_init_tables.sql and run it
 ```
 
 2. Edit `server/.env` with your database credentials:
@@ -53,39 +54,14 @@ CREATE DATABASE smart_recipe;
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_DATABASE=smart_recipe
+DB_DATABASE=themenu
 DB_USERNAME=root
-DB_PASSWORD=your_password
+DB_PASSWORD=
 ```
 
-3. Run the SQL schema:
-```bash
-# From MySQL client or phpMyAdmin
-mysql -u root -p smart_recipe < ../database/migrations/001_init_tables.sql
-```
-
-4. Create the migrations table:
+3. Create the migrations table:
 ```bash
 php artisan migrate:install
-```
-
-**Option B: SQLite (Quick Testing)**
-
-1. Edit `server/.env`:
-```env
-DB_CONNECTION=sqlite
-DB_DATABASE=database/database.sqlite
-```
-
-2. Create the database file:
-```bash
-touch database/database.sqlite    # Mac/Linux
-# New-Item database/database.sqlite    # Windows PowerShell
-```
-
-3. Run migrations:
-```bash
-php artisan migrate
 ```
 
 #### 4. Frontend Setup (React + Vite)
