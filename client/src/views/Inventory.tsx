@@ -8,14 +8,23 @@ interface Item {
   category?: string;
 }
 
-export default function Inventory() {
-  const [items, setItems] = useState<Item[]>([
-    { id: 1, name: 'Tomato', quantity: '3', category: 'Vegetable' },
-    { id: 2, name: 'Onion', quantity: '5', category: 'Vegetable' },
-    { id: 3, name: 'Chicken', quantity: '1', category: 'Meat' },
-  ]);
+function loadItems(): Item[] {
+  try {
+    const stored = localStorage.getItem('inventoryItems');
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+}
 
-  const handleDelete = (id: number) => setItems((s) => s.filter((i) => i.id !== id));
+export default function Inventory() {
+  const [items, setItems] = useState<Item[]>(loadItems);
+
+  const handleDelete = (id: number) => {
+    const updated = items.filter((i) => i.id !== id);
+    setItems(updated);
+    localStorage.setItem('inventoryItems', JSON.stringify(updated));
+  };
 
   return (
     <div style={{ paddingTop: 80 }}>

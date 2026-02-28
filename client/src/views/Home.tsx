@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 export default function Home() {
   const navigate = useNavigate();
 
-  const inventoryCount = 14;
+  const inventoryCount = JSON.parse(localStorage.getItem('inventoryItems') || '[]').length;
   const recipesReady = 3;
   const userName = 'Akif';
 
