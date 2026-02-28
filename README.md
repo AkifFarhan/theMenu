@@ -3,6 +3,150 @@
 
 ---
 
+## Quick Setup Guide
+
+### Prerequisites
+
+Before setting up the project, ensure you have the following installed:
+
+- **PHP** >= 8.0 with extensions: `pdo`, `mbstring`, `xml`, `bcmath`, `curl`
+- **Composer** (PHP dependency manager)
+- **MySQL** >= 5.7 or **MariaDB** >= 10.3
+- **Node.js** >= 16.x and **npm** >= 8.x
+- **Git**
+
+### Installation Steps
+
+#### 1. Clone the Repository
+```bash
+git clone <repository-url>
+cd theMenu
+```
+
+#### 2. Backend Setup (Laravel)
+
+```bash
+cd server
+
+# Install PHP dependencies
+composer install
+
+# Copy environment file
+copy .env.example .env    # Windows
+# cp .env.example .env    # Mac/Linux
+
+# Generate application key
+php artisan key:generate
+```
+
+#### 3. Database Configuration
+
+**Option A: MySQL (Recommended for Production)**
+
+1. Create a MySQL database:
+```sql
+CREATE DATABASE smart_recipe;
+```
+
+2. Edit `server/.env` with your database credentials:
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=smart_recipe
+DB_USERNAME=root
+DB_PASSWORD=your_password
+```
+
+3. Run the SQL schema:
+```bash
+# From MySQL client or phpMyAdmin
+mysql -u root -p smart_recipe < ../database/migrations/001_init_tables.sql
+```
+
+4. Create the migrations table:
+```bash
+php artisan migrate:install
+```
+
+**Option B: SQLite (Quick Testing)**
+
+1. Edit `server/.env`:
+```env
+DB_CONNECTION=sqlite
+DB_DATABASE=database/database.sqlite
+```
+
+2. Create the database file:
+```bash
+touch database/database.sqlite    # Mac/Linux
+# New-Item database/database.sqlite    # Windows PowerShell
+```
+
+3. Run migrations:
+```bash
+php artisan migrate
+```
+
+#### 4. Frontend Setup (React + Vite)
+
+```bash
+cd ../client
+
+# Install Node.js dependencies
+npm install
+
+# Copy environment file if needed
+copy .env.example .env    # Windows (if exists)
+```
+
+#### 5. Start Development Servers
+
+**Terminal 1 - Backend (Laravel):**
+```bash
+cd server
+php artisan serve
+# Server runs at http://127.0.0.1:8000
+```
+
+**Terminal 2 - Frontend (React):**
+```bash
+cd client
+npm run dev
+# App runs at http://localhost:5173
+```
+
+#### 6. Verify Setup
+
+- Backend API: http://127.0.0.1:8000
+- Frontend App: http://localhost:5173
+- Test database connection:
+```bash
+cd server
+php artisan migrate:status
+php artisan tinker
+# Inside tinker: DB::select('SHOW TABLES;')
+```
+
+### Common Issues
+
+**"vendor/autoload.php not found"**
+- Run `composer install` in the `server` folder
+
+**"APP_KEY is missing"**
+- Run `php artisan key:generate`
+
+**Database connection errors**
+- Verify MySQL is running
+- Check `.env` credentials match your MySQL setup
+- Ensure database exists: `CREATE DATABASE smart_recipe;`
+
+**Port already in use**
+- Laravel: `php artisan serve --port=8001`
+- Vite: Edit `client/vite.config.ts` to change port
+
+---
+
 ## Introduction
 
 Every day, people buy groceries without fully planning their meals, leading to food waste, overspending, and decision fatigue in the kitchen. At the same time, many unique recipes remain undiscovered or unused within small groups of users.
