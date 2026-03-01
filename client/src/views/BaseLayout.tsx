@@ -21,8 +21,10 @@ const BaseLayout: React.FC<BaseLayoutProps> = ({ children }) => {
           <Link className="navbar-brand" to="/">
             theMenu
           </Link>
-          <div className="d-flex align-items-center ms-auto">
-            <div className="me-3">Akif</div>
+          <div className="d-flex align-items-center ms-auto gap-2">
+            <Link to="/profile" style={{ textDecoration: 'none', cursor: 'pointer' }}>
+              <div className="me-2" style={{ cursor: 'pointer', color: '#007bff' }}>Akif</div>
+            </Link>
             <Button variant="outline-secondary" size="sm" onClick={handleLogout}>
               Logout
             </Button>
