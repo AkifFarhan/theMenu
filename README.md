@@ -97,14 +97,65 @@ npm run dev
 - Backend API: http://127.0.0.1:8000
 - Frontend App: http://localhost:5173
 - Test database connection:
-```bash
-cd server
-php artisan migrate:status
-php artisan tinker
-# Inside tinker: DB::select('SHOW TABLES;')
-```
 
-### Common Issues
+---
+
+## Authentication System
+
+theMenu includes a complete authentication system using Laravel Sanctum for API token management.
+
+### Features
+
+- **User Registration** - Create new accounts with username, email, and password
+- **User Login** - Authenticate with email and password to receive a bearer token
+- **Token-based Authentication** - Secure API access using Laravel Sanctum tokens
+- **Automatic Token Handling** - Frontend automatically includes tokens in all API requests
+- **Session Management** - Logout functionality revokes current access token
+- **Protected Routes** - Frontend routes require authentication to access
+
+### API Endpoints
+
+**Public Routes:**
+- `POST /api/register` - Register new user
+  ```json
+  {
+    "username": "john_doe",
+    "email": "john@example.com",
+    "password": "password123"
+  }
+  ```
+
+- `POST /api/login` - Login user
+  ```json
+  {
+    "email": "john@example.com",
+    "password": "password123"
+  }
+  ```
+
+**Protected Routes (Require Bearer Token):**
+- `POST /api/logout` - Logout current user
+- `GET /api/me` - Get authenticated user information
+
+### Frontend Pages
+
+- `/login` - Login page
+- `/register` - Registration page
+- All other routes require authentication and redirect to login if not authenticated
+
+### Usage
+
+1. Start the application
+2. Navigate to http://localhost:5173
+3. You'll be redirected to the login page
+4. Register a new account or login with existing credentials
+5. Upon successful authentication, you'll be redirected to the home page
+6. Your authentication token is stored in localStorage
+7. Click "Logout" in the navbar to sign out
+
+---
+
+## Common Issues
 
 **"vendor/autoload.php not found"**
 - Run `composer install` in the `server` folder
