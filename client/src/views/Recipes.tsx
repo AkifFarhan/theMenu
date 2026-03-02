@@ -1,4 +1,3 @@
-import React from 'react';
 import { ListGroup, Button } from 'react-bootstrap';
 
 const sample = [

@@ -1,0 +1,58 @@
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: theMenu
+        APP_ENV: local
+        APP_DEBUG: 'true'
+        DB_CONNECTION: mysql
+        DB_HOST: db
+        DB_PORT: 3306
+        DB_DATABASE: themenu
+        DB_USERNAME: themenu_user
+        DB_PASSWORD: secret
+    image: themenu_app:latest
+    ports:
+      - "8000:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_NAME: theMenu
+      APP_ENV: local
+      APP_DEBUG: 'true'
+      APP_URL: http://localhost:8000
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_DATABASE: themenu
+      DB_USERNAME: themenu_user
+      DB_PASSWORD: secret
+    volumes:
+      - ./server:/var/www/html:delegated
+      - ./client:/var/www/html/client:delegated
+    restart: unless-stopped
+
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootsecret
+      MYSQL_DATABASE: themenu
+      MYSQL_USER: themenu_user
+      MYSQL_PASSWORD: secret
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  db_data:
