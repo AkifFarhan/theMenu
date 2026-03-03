@@ -12,6 +12,28 @@ class ApiClient {
         'Content-Type': 'application/json',
       },
     });
+
+    // Add token to requests if it exists
+    this.client.interceptors.request.use((config) => {
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    });
+
+    // Handle 401 errors (unauthorized)
+    this.client.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response?.status === 401) {
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('user');
+          window.location.href = '/login';
+        }
+        return Promise.reject(error);
+      }
+    );
   }
 
   // currently, only fetches 1 session greater than current time
@@ -71,6 +93,68 @@ class ApiClient {
     } catch (error) {
       this.handleError(error);
     }
+  }
+
+  // Authentication methods
+  async register(username: string, email: string, password: string) {
+    try {
+      const response = await this.client.post('/api/register', { username, email, password });
+      if (response.data.token) {
+        localStorage.setItem('auth_token', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+      }
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+      throw error;
+    }
+  }
+
+  async login(email: string, password: string) {
+    try {
+      const response = await this.client.post('/api/login', { email, password });
+      if (response.data.token) {
+        localStorage.setItem('auth_token', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+      }
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+      throw error;
+    }
+  }
+
+  async logout() {
+    try {
+      await this.client.post('/api/logout');
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('user');
+      return true;
+    } catch (error) {
+      this.handleError(error);
+      return false;
+    }
+  }
+
+  async getMe() {
+    try {
+      const response = await this.client.get('/api/me');
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+      throw error;
+    }
+  }
+
+  // Check if user is authenticated
+  isAuthenticated(): boolean {
+    return !!localStorage.getItem('auth_token');
+  }
+
+  // Get current user from localStorage
+  getCurrentUser() {
+    const userStr = localStorage.getItem('user');
+    return userStr ? JSON.parse(userStr) : null;
   }
 
   // Handle common errors
