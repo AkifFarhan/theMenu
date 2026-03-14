@@ -73,6 +73,63 @@ class ApiClient {
     }
   }
 
+  // Ingredients
+  async getIngredients() {
+    try {
+      const response = await this.client.get('/api/ingredients');
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  async addIngredient(name: string, baseUnit: string) {
+    try {
+      const response = await this.client.post('/api/ingredients', { name, base_unit: baseUnit });
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  // Inventories
+  async getInventories() {
+    try {
+      const response = await this.client.get('/api/inventories');
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  async addInventory(ingredientId: number, quantity: number, expiryDate?: string) {
+    try {
+      const response = await this.client.post('/api/inventories', { ingredient_id: ingredientId, quantity, expiry_date: expiryDate });
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  // Recipes
+  async getRecipes() {
+    try {
+      const response = await this.client.get('/api/recipes');
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
+  async addRecipe(title: string, description: string, ingredients: { id: number, quantity: number }[]) {
+    try {
+      const response = await this.client.post('/api/recipes', { title, description, ingredients });
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+    }
+  }
+
   // Handle common errors
   handleError(error: any) {
     if (error.response) {

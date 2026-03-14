@@ -3,6 +3,9 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\SessionController;
+use App\Http\Controllers\IngredientController;
+use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\RecipeController;
 
 /*
 |--------------------------------------------------------------------------
@@ -24,3 +27,8 @@ Route::post('/session', [SessionController::class, 'createSession'])->middleware
 Route::put('/session', [SessionController::class, 'updateSession'])->middleware('check.admin');
 Route::post('/sessions', [SessionController::class, 'viewSessions'])->middleware('check.admin');
 Route::post('/attendance', [SessionController::class, 'submitAttendance']);
+
+// New routes for food management
+Route::apiResource('ingredients', IngredientController::class);
+Route::apiResource('inventories', InventoryController::class);
+Route::apiResource('recipes', RecipeController::class);

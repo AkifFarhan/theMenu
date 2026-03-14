@@ -1,31 +1,31 @@
 -- ==========================================
 -- DATABASE: Smart Inventory Recipe System
+-- MSSQL VERSION
 -- ==========================================
 
-CREATE DATABASE IF NOT EXISTS smart_recipe;
-USE smart_recipe;
+USE themenu;
 
 -- ==========================================
 -- USERS TABLE
 -- ==========================================
 CREATE TABLE users (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    id BIGINT IDENTITY(1,1) PRIMARY KEY,
     username VARCHAR(100) NOT NULL,
     email VARCHAR(150) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    created_at DATETIME2 NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL DEFAULT GETDATE()
 );
 
 -- ==========================================
--- INGREDIENTS (GLOBAL NORMALIZED LIST)
+-- INGREDIENTS
 -- ==========================================
 CREATE TABLE ingredients (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    id BIGINT IDENTITY(1,1) PRIMARY KEY,
     name VARCHAR(150) NOT NULL UNIQUE,
-    base_unit ENUM('g', 'ml', 'piece') NOT NULL,
-    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    base_unit VARCHAR(10) NOT NULL CHECK (base_unit IN ('g', 'ml', 'piece')),
+    created_at DATETIME2 NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL DEFAULT GETDATE()
 );
 
 CREATE INDEX idx_ingredient_name ON ingredients(name);
@@ -34,13 +34,13 @@ CREATE INDEX idx_ingredient_name ON ingredients(name);
 -- USER INVENTORY
 -- ==========================================
 CREATE TABLE inventories (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT UNSIGNED NOT NULL,
-    ingredient_id BIGINT UNSIGNED NOT NULL,
+    id BIGINT IDENTITY(1,1) PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    ingredient_id BIGINT NOT NULL,
     quantity DECIMAL(10,2) NOT NULL DEFAULT 0,
     expiry_date DATE NULL,
-    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at DATETIME2 NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL DEFAULT GETDATE(),
 
     CONSTRAINT fk_inventory_user
         FOREIGN KEY (user_id) REFERENCES users(id)
@@ -60,13 +60,13 @@ CREATE INDEX idx_inventory_ingredient ON inventories(ingredient_id);
 -- RECIPES
 -- ==========================================
 CREATE TABLE recipes (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    id BIGINT IDENTITY(1,1) PRIMARY KEY,
     title VARCHAR(200) NOT NULL,
     description TEXT NULL,
-    is_ai_generated BOOLEAN DEFAULT TRUE,
-    created_by BIGINT UNSIGNED NULL,
-    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    is_ai_generated BIT DEFAULT 1,
+    created_by BIGINT NULL,
+    created_at DATETIME2 NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL DEFAULT GETDATE(),
 
     CONSTRAINT fk_recipe_user
         FOREIGN KEY (created_by) REFERENCES users(id)
@@ -76,23 +76,22 @@ CREATE TABLE recipes (
 CREATE INDEX idx_recipe_title ON recipes(title);
 
 -- ==========================================
--- RECIPE INGREDIENTS (PIVOT TABLE)
+-- RECIPE INGREDIENTS
 -- ==========================================
 CREATE TABLE recipe_ingredients (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    recipe_id BIGINT UNSIGNED NOT NULL,
-    ingredient_id BIGINT UNSIGNED NOT NULL,
+    id BIGINT IDENTITY(1,1) PRIMARY KEY,
+    recipe_id BIGINT NOT NULL,
+    ingredient_id BIGINT NOT NULL,
     required_quantity DECIMAL(10,2) NOT NULL,
-    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at DATETIME2 NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL DEFAULT GETDATE(),
 
     CONSTRAINT fk_recipeingredient_recipe
         FOREIGN KEY (recipe_id) REFERENCES recipes(id)
         ON DELETE CASCADE,
 
     CONSTRAINT fk_recipeingredient_ingredient
-        FOREIGN KEY (ingredient_id) REFERENCES ingredients(id)
-        ON DELETE CASCADE,
+        FOREIGN KEY (ingredient_id) REFERENCES ingredients(id),
 
     CONSTRAINT unique_recipe_ingredient UNIQUE (recipe_id, ingredient_id)
 );
@@ -104,12 +103,12 @@ CREATE INDEX idx_recipeingredient_ingredient ON recipe_ingredients(ingredient_id
 -- INSTRUCTIONS
 -- ==========================================
 CREATE TABLE instructions (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    recipe_id BIGINT UNSIGNED NOT NULL,
+    id BIGINT IDENTITY(1,1) PRIMARY KEY,
+    recipe_id BIGINT NOT NULL,
     step_number INT NOT NULL,
     instruction_text TEXT NOT NULL,
-    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at DATETIME2 NULL DEFAULT GETDATE(),
+    updated_at DATETIME2 NULL DEFAULT GETDATE(),
 
     CONSTRAINT fk_instruction_recipe
         FOREIGN KEY (recipe_id) REFERENCES recipes(id)
@@ -119,15 +118,15 @@ CREATE TABLE instructions (
 CREATE INDEX idx_instruction_recipe ON instructions(recipe_id);
 
 -- ==========================================
--- OPTIONAL: COOKING HISTORY (For Auto Deduction Tracking)
+-- COOKING LOGS
 -- ==========================================
 CREATE TABLE cooking_logs (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT UNSIGNED NOT NULL,
-    recipe_id BIGINT UNSIGNED NOT NULL,
+    id BIGINT IDENTITY(1,1) PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    recipe_id BIGINT NOT NULL,
     scaling_factor DECIMAL(5,2) DEFAULT 1.00,
-    auto_deducted BOOLEAN DEFAULT FALSE,
-    cooked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    auto_deducted BIT DEFAULT 0,
+    cooked_at DATETIME2 DEFAULT GETDATE(),
 
     CONSTRAINT fk_cooking_user
         FOREIGN KEY (user_id) REFERENCES users(id)
@@ -135,5 +134,4 @@ CREATE TABLE cooking_logs (
 
     CONSTRAINT fk_cooking_recipe
         FOREIGN KEY (recipe_id) REFERENCES recipes(id)
-        ON DELETE CASCADE
 );

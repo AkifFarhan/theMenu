@@ -1,29 +1,35 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Table, Button } from 'react-bootstrap';
+import ApiClient from '../api';
 
-interface Item {
+interface InventoryItem {
   id: number;
-  name: string;
-  quantity: string;
-  category?: string;
-}
-
-function loadItems(): Item[] {
-  try {
-    const stored = localStorage.getItem('inventoryItems');
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
+  user_id: number;
+  ingredient_id: number;
+  quantity: number;
+  expiry_date: string | null;
+  ingredient: {
+    id: number;
+    name: string;
+    base_unit: string;
+  };
 }
 
 export default function Inventory() {
-  const [items, setItems] = useState<Item[]>(loadItems);
+  const [items, setItems] = useState<InventoryItem[]>([]);
+  const api = new ApiClient();
 
-  const handleDelete = (id: number) => {
-    const updated = items.filter((i) => i.id !== id);
-    setItems(updated);
-    localStorage.setItem('inventoryItems', JSON.stringify(updated));
+  useEffect(() => {
+    const fetchInventories = async () => {
+      const data = await api.getInventories();
+      if (data) setItems(data);
+    };
+    fetchInventories();
+  }, []);
+
+  const handleDelete = async (id: number) => {
+    // For now, just remove from state
+    setItems(prev => prev.filter(i => i.id !== id));
   };
 
   return (
@@ -34,16 +40,18 @@ export default function Inventory() {
           <tr>
             <th>Name</th>
             <th>Quantity</th>
-            <th>Category</th>
+            <th>Unit</th>
+            <th>Expiry Date</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {items.map((it) => (
             <tr key={it.id}>
-              <td>{it.name}</td>
+              <td>{it.ingredient.name}</td>
               <td>{it.quantity}</td>
-              <td>{it.category}</td>
+              <td>{it.ingredient.base_unit}</td>
+              <td>{it.expiry_date}</td>
               <td>
                 <Button size="sm" variant="outline-secondary" className="me-2">Edit</Button>
                 <Button size="sm" variant="danger" onClick={() => handleDelete(it.id)}>Delete</Button>
