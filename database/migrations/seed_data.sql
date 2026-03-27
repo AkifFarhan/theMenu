@@ -2,7 +2,7 @@
 -- SEED DATA FOR SMART RECIPE SYSTEM
 -- ==========================================
 
-USE smart_recipe;
+USE themenu;
 
 -- ==========================================
 -- USERS (passwords are hashed versions of 'password123' for demonstration)
