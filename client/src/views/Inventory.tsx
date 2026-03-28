@@ -1,31 +1,49 @@
-import { useState } from 'react';
-import { Table, Button } from 'react-bootstrap';
+import { useEffect, useState } from 'react';
+import { Alert, Button, Spinner, Table } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
+import ApiClient from '../api';
 
 interface Item {
   id: number;
   name: string;
-  quantity: string;
-  category?: string;
+  quantity: number;
+  unit: string;
 }
 
-function loadItems(): Item[] {
-  try {
-    const stored = localStorage.getItem('inventoryItems');
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-}
+const api = new ApiClient();
 
 export default function Inventory() {
-  const [items, setItems] = useState<Item[]>(loadItems);
+  const [items, setItems] = useState<Item[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const handleDelete = (id: number) => {
-    const updated = items.filter((i) => i.id !== id);
-    setItems(updated);
-    localStorage.setItem('inventoryItems', JSON.stringify(updated));
+  const loadInventory = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await api.getInventory();
+      setItems(Array.isArray(response.items) ? response.items : []);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load inventory.';
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadInventory();
+  }, []);
+
+  const handleDelete = async (id: number) => {
+    try {
+      await api.deleteInventoryItem(id);
+      setItems((prev) => prev.filter((item) => item.id !== id));
+    } catch {
+      // Toast is handled in ApiClient.
+    }
   };
 
   return (
@@ -41,24 +59,43 @@ export default function Inventory() {
           <tr>
             <th>Name</th>
             <th>Quantity</th>
-            <th>Category</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          {items.map((it) => (
-            <tr key={it.id}>
-              <td>{it.name}</td>
-              <td>{it.quantity}</td>
-              <td>{it.category}</td>
-              <td>
-                <Button size="sm" variant="outline-secondary" className="me-2">Edit</Button>
-                <Button size="sm" variant="danger" onClick={() => handleDelete(it.id)}>Delete</Button>
+          {isLoading && (
+            <tr>
+              <td colSpan={3} className="text-center py-4">
+                <Spinner animation="border" size="sm" className="me-2" />
+                Loading inventory...
               </td>
             </tr>
-          ))}
+          )}
+
+          {!isLoading && items.length === 0 && (
+            <tr>
+              <td colSpan={3} className="text-center text-muted py-4">
+                Your inventory is empty.
+              </td>
+            </tr>
+          )}
+
+          {!isLoading &&
+            items.map((it) => (
+              <tr key={it.id}>
+                <td>{it.name}</td>
+                <td>{it.quantity} {it.unit}</td>
+                <td>
+                  <Button size="sm" variant="danger" onClick={() => handleDelete(it.id)}>
+                    Delete
+                  </Button>
+                </td>
+              </tr>
+            ))}
         </tbody>
       </Table>
+
+      {error && <Alert variant="warning" className="mt-3 mb-0">{error}</Alert>}
     </div>
   );
 }
