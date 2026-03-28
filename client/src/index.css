@@ -5,11 +5,61 @@
 }
 body {
   font-family: 'Josefin Sans', serif;
-  background-image: url('/home.jpg');
+}
+
+.auth-page {
+  min-height: 100vh;
+  background-image: url('/loginbg.jpg');
   background-size: cover;
-  background-position: center bottom;
+  background-position: center;
   background-repeat: no-repeat;
-  background-attachment: fixed;
+  background-color: #ffffff;
+  padding: 0;
+}
+
+.auth-page.container-fluid {
+  padding: 0;
+}
+
+.auth-card {
+  background: rgba(255, 253, 248, 0.9);
+  border: 1.5px solid #c8912e;
+  box-shadow:
+    0 0 0 1px rgba(255, 227, 169, 0.35),
+    0 18px 38px rgba(189, 144, 60, 0.28),
+    0 8px 16px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(6px);
+  color: #1f2a44;
+}
+
+.auth-card h2 {
+  color: #1f2a44;
+  font-weight: 700;
+}
+
+.auth-card .form-label {
+  color: #1f2a44;
+  font-weight: 600;
+}
+
+.auth-card .btn-primary {
+  background: linear-gradient(135deg, #1b2f56, #172646);
+  border: 1px solid #1b2f56;
+  font-weight: 700;
+}
+
+.auth-card .btn-primary:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12);
+}
+
+.auth-card a {
+  color: #1f2a44;
+  font-weight: 600;
+}
+
+.auth-card a:hover {
+  color: #c78c23;
 }
 
 .home-hero {
@@ -124,6 +174,11 @@ body {
   flex-direction: column;
   min-height: 100vh;
   position: relative;
+  background-image: url('/home.jpg');
+  background-size: cover;
+  background-position: center bottom;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
 }
 
 .layout::before {
@@ -154,6 +209,11 @@ header.navbar {
 
 .navbar-brand:hover {
   color: #c78c23 !important;
+}
+
+.navbar-brand img {
+  display: block;
+  border-radius: 6px;
 }
 
 .navbar .user-link {
