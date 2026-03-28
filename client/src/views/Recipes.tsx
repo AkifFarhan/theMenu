@@ -131,7 +131,7 @@ export default function Recipes() {
   return (
     <div className="recipes-page page-shell">
       <div className="d-flex align-items-center justify-content-between gap-2 page-heading-row">
-        <h3 className="page-heading mb-0">Matchmaker Results</h3>
+        <div className="inventory-chip">Matchmaker Results</div>
         <Button className="btn-navy" disabled={!canGenerate} onClick={handleGenerate}>
           Generate Recipes
         </Button>

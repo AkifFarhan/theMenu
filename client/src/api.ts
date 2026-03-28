@@ -194,7 +194,10 @@ class ApiClient {
       return true;
     } catch (error) {
       this.handleError(error);
-      return false;
+      // Even if the network fails, clear local auth so the user can fully log out client-side.
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('user');
+      return true;
     }
   }
 

@@ -48,8 +48,8 @@ export default function Inventory() {
 
   return (
     <div className="inventory-page page-shell">
-      <div className="d-flex align-items-center justify-content-between gap-2 page-heading-row">
-        <h3 className="page-heading mb-0">My Inventory</h3>
+      <div className="d-flex align-items-center justify-content-between gap-3 flex-wrap page-heading-row">
+        <div className="inventory-chip">My Inventory</div>
         <Button className="btn-navy" onClick={() => navigate('/recipes')}>
           Generate Recipes
         </Button>

@@ -1,13 +1,16 @@
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import { BrowserRouter } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
 
 const rootElement = document.getElementById('root');
 
 if (rootElement) {
   createRoot(rootElement).render(
     <BrowserRouter>
-      <App />
+      <AuthProvider>
+        <App />
+      </AuthProvider>
     </BrowserRouter>
   );
 } else {

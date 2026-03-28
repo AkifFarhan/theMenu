@@ -48,7 +48,9 @@ export default function Home() {
     <section className="home-hero">
       <div className="home-hero__overlay" />
       <div className="home-hero__content d-flex flex-column align-items-center">
-        <h2 className="mb-4">Welcome back, {userName}!</h2>
+        <button className="home-welcome-btn" type="button">
+          Welcome back, {userName}
+        </button>
 
         {isLoading && (
           <Alert variant="info" className="mb-4 d-flex align-items-center gap-2">
