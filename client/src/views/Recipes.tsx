@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Badge, Button, Card, Col, Row, Spinner } from 'react-bootstrap';
 import { getRecipesFromInventory, type GeneratedRecipe } from '../services/geminiService';
+import ApiClient from '../api';
 
 interface Item {
   id: number;
@@ -50,14 +51,7 @@ function localFallbackRecipes(items: string[]): RecipeBuckets {
   };
 }
 
-function loadItems(): Item[] {
-  try {
-    const stored = localStorage.getItem('inventoryItems');
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-}
+const api = new ApiClient();
 
 const cardMeta = {
   quick: { title: 'Recipe Card 1', tag: 'Quick' },
@@ -70,6 +64,25 @@ export default function Recipes() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [inventoryNames, setInventoryNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    const loadInventory = async () => {
+      try {
+        const response = await api.getInventory();
+        const names = Array.isArray(response.items)
+          ? response.items
+              .map((item: Item) => item.name?.trim())
+              .filter((name: string | undefined): name is string => Boolean(name))
+          : [];
+        setInventoryNames(names);
+      } catch {
+        setInventoryNames([]);
+      }
+    };
+
+    loadInventory();
+  }, []);
 
   useEffect(() => {
     if (cooldownSeconds <= 0) {
@@ -83,7 +96,6 @@ export default function Recipes() {
     return () => window.clearInterval(timer);
   }, [cooldownSeconds]);
 
-  const inventoryNames = useMemo(() => loadItems().map((item) => item.name), []);
   const canGenerate = inventoryNames.length > 0 && !isLoading && cooldownSeconds === 0;
 
   const handleGenerate = async () => {
@@ -99,6 +111,15 @@ export default function Recipes() {
       if (message.includes('429')) {
         setRecipes(localFallbackRecipes(inventoryNames));
         setError('Gemini is rate-limited right now. Showing local fallback recipes.');
+      } else if (
+        message.includes('403') ||
+        message.toLowerCase().includes('api key') ||
+        message.toLowerCase().includes('permission') ||
+        message.toLowerCase().includes('leaked') ||
+        message.toLowerCase().includes('missing vite_gemini_api_key')
+      ) {
+        setRecipes(localFallbackRecipes(inventoryNames));
+        setError(`${message} Showing local fallback recipes for now.`);
       } else {
         setError(message);
       }

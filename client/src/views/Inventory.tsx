@@ -1,33 +1,54 @@
-import { useState } from 'react';
-import { Table, Button } from 'react-bootstrap';
+import { useEffect, useState } from 'react';
+import { Alert, Button, Spinner, Table } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
+import ApiClient from '../api';
 
 interface Item {
   id: number;
   name: string;
-  quantity: string;
-  category?: string;
+  quantity: number;
+  unit: string;
 }
 
-function loadItems(): Item[] {
-  try {
-    const stored = localStorage.getItem('inventoryItems');
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-}
+const api = new ApiClient();
 
 export default function Inventory() {
-  const [items, setItems] = useState<Item[]>(loadItems);
-  const [editId, setEditId] = useState<number | null>(null);
-  const [editData, setEditData] = useState({ name: '', quantity: '', category: '' });
+const [items, setItems] = useState<Item[]>(loadItems);
+const [isLoading, setIsLoading] = useState(true);
+const [error, setError] = useState<string | null>(null);
+
+const [editId, setEditId] = useState<number | null>(null);
+const [editData, setEditData] = useState({ name: '', quantity: '', category: '' });
+
+const navigate = useNavigate();
   const navigate = useNavigate();
 
-  const handleDelete = (id: number) => {
-    const updated = items.filter((i) => i.id !== id);
-    setItems(updated);
-    localStorage.setItem('inventoryItems', JSON.stringify(updated));
+  const loadInventory = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await api.getInventory();
+      setItems(Array.isArray(response.items) ? response.items : []);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load inventory.';
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadInventory();
+  }, []);
+
+  const handleDelete = async (id: number) => {
+    try {
+      await api.deleteInventoryItem(id);
+      setItems((prev) => prev.filter((item) => item.id !== id));
+    } catch {
+      // Toast is handled in ApiClient.
+    }
   };
 
   const handleEditStart = (item: Item) => {
@@ -60,72 +81,94 @@ export default function Inventory() {
           Generate Recipes
         </Button>
       </div>
+<div className="themed-card mt-3">
+  <Table className="themed-table mb-0" responsive striped bordered hover>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Quantity</th>
+        <th>Category</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {/* 1. Loading State */}
+      {isLoading && (
+        <tr>
+          <td colSpan={4} className="text-center py-4">
+            <Spinner animation="border" size="sm" className="me-2" />
+            Loading inventory...
+          </td>
+        </tr>
+      )}
 
-      <div className="themed-card mt-3">
-        <Table className="themed-table mb-0" responsive>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Quantity</th>
-              <th>Category</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((it) => (
-              <tr key={it.id}>
-                {editId === it.id ? (
-                  <>
-                    <td>
-                      <input
-                        className="form-control form-control-sm"
-                        value={editData.name}
-                        onChange={(e) => setEditData((d) => ({ ...d, name: e.target.value }))}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        className="form-control form-control-sm"
-                        value={editData.quantity}
-                        onChange={(e) => setEditData((d) => ({ ...d, quantity: e.target.value }))}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        className="form-control form-control-sm"
-                        value={editData.category}
-                        onChange={(e) => setEditData((d) => ({ ...d, category: e.target.value }))}
-                      />
-                    </td>
-                    <td>
-                      <Button size="sm" variant="success" className="me-2" onClick={() => handleEditSave(it.id)}>
-                        Save
-                      </Button>
-                      <Button size="sm" variant="outline-secondary" onClick={handleEditCancel}>
-                        Cancel
-                      </Button>
-                    </td>
-                  </>
-                ) : (
-                  <>
-                    <td>{it.name}</td>
-                    <td>{it.quantity}</td>
-                    <td>{it.category}</td>
-                    <td>
-                      <Button size="sm" variant="outline-secondary" className="me-2" onClick={() => handleEditStart(it)}>
-                        Edit
-                      </Button>
-                      <Button size="sm" variant="danger" onClick={() => handleDelete(it.id)}>
-                        Delete
-                      </Button>
-                    </td>
-                  </>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-      </div>
-    </div>
+      {/* 2. Empty State */}
+      {!isLoading && items.length === 0 && (
+        <tr>
+          <td colSpan={4} className="text-center text-muted py-4">
+            Your inventory is empty.
+          </td>
+        </tr>
+      )}
+
+      {/* 3. Data Rows with Edit Logic */}
+      {!isLoading &&
+        items.map((it) => (
+          <tr key={it.id}>
+            {editId === it.id ? (
+              <>
+                <td>
+                  <input
+                    className="form-control form-control-sm"
+                    value={editData.name}
+                    onChange={(e) => setEditData((d) => ({ ...d, name: e.target.value }))}
+                  />
+                </td>
+                <td>
+                  <input
+                    className="form-control form-control-sm"
+                    value={editData.quantity}
+                    onChange={(e) => setEditData((d) => ({ ...d, quantity: e.target.value }))}
+                  />
+                </td>
+                <td>
+                  <input
+                    className="form-control form-control-sm"
+                    value={editData.category}
+                    onChange={(e) => setEditData((d) => ({ ...d, category: e.target.value }))}
+                  />
+                </td>
+                <td>
+                  <Button size="sm" variant="success" className="me-2" onClick={() => handleEditSave(it.id)}>
+                    Save
+                  </Button>
+                  <Button size="sm" variant="outline-secondary" onClick={handleEditCancel}>
+                    Cancel
+                  </Button>
+                </td>
+              </>
+            ) : (
+              <>
+                <td>{it.name}</td>
+                <td>{it.quantity} {it.unit}</td>
+                <td>{it.category}</td>
+                <td>
+                  <Button size="sm" variant="outline-secondary" className="me-2" onClick={() => handleEditStart(it)}>
+                    Edit
+                  </Button>
+                  <Button size="sm" variant="danger" onClick={() => handleDelete(it.id)}>
+                    Delete
+                  </Button>
+                </td>
+              </>
+            )}
+          </tr>
+        ))}
+    </tbody>
+  </Table>
+</div>
+
+{/* 4. Error Alert */}
+{error && <Alert variant="warning" className="mt-3 mb-0">{error}</Alert>}    </div>
   );
 }
