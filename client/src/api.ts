@@ -15,7 +15,17 @@ class ApiClient {
     }
   }
 
-  async addInventoryItems(items: Array<{ name: string; quantity: number; unit?: 'g' | 'ml' | 'piece' }>) {
+  async getIngredients() {
+    try {
+      const response = await this.client.get('/api/ingredients');
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+      throw error;
+    }
+  }
+
+  async addInventoryItems(items: Array<{ ingredient_id: number; quantity: number; expiry_date?: string }>) {
     try {
       const response = await this.client.post('/api/inventory/bulk', { items });
       return response.data;
@@ -28,6 +38,16 @@ class ApiClient {
   async deleteInventoryItem(id: number) {
     try {
       const response = await this.client.delete(`/api/inventory/${id}`);
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+      throw error;
+    }
+  }
+
+  async updateInventoryItem(id: number, data: { quantity?: number; expiry_date?: string | null }) {
+    try {
+      const response = await this.client.put(`/api/inventory/${id}`, data);
       return response.data;
     } catch (error) {
       this.handleError(error);
