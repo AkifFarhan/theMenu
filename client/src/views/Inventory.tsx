@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Table, Button, Form } from 'react-bootstrap';
+import { useState } from 'react';
+import { Table, Button } from 'react-bootstrap';
+import { useNavigate } from 'react-router-dom';
 
 interface Item {
   id: number;
@@ -19,6 +20,7 @@ function loadItems(): Item[] {
 
 export default function Inventory() {
   const [items, setItems] = useState<Item[]>(loadItems);
+  const navigate = useNavigate();
 
   const handleDelete = (id: number) => {
     const updated = items.filter((i) => i.id !== id);
@@ -28,7 +30,12 @@ export default function Inventory() {
 
   return (
     <div style={{ paddingTop: 80 }}>
-      <h3>My Inventory</h3>
+      <div className="d-flex align-items-center justify-content-between gap-2">
+        <h3 className="mb-0">My Inventory</h3>
+        <Button variant="secondary" onClick={() => navigate('/recipes')}>
+          Generate Recipes
+        </Button>
+      </div>
       <Table striped bordered hover>
         <thead>
           <tr>

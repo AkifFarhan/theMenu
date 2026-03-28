@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Table, Button, Form } from 'react-bootstrap';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import '../addFood.css';
 
 const CATEGORIES = ['Vegetables', 'Meat', 'Dairy', 'Pantry', 'Other'];
