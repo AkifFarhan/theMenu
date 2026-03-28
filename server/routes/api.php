@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\SessionController;
+use App\Http\Controllers\ProfileController;
 
 /*
 |--------------------------------------------------------------------------
@@ -24,3 +25,6 @@ Route::post('/session', [SessionController::class, 'createSession'])->middleware
 Route::put('/session', [SessionController::class, 'updateSession'])->middleware('check.admin');
 Route::post('/sessions', [SessionController::class, 'viewSessions'])->middleware('check.admin');
 Route::post('/attendance', [SessionController::class, 'submitAttendance']);
+
+Route::middleware(['auth:sanctum'])->get('/profile', [ProfileController::class, 'show']);
+Route::middleware(['auth:sanctum'])->put('/profile', [ProfileController::class, 'update']);

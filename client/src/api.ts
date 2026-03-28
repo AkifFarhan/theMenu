@@ -8,10 +8,32 @@ class ApiClient {
   constructor() {
     this.client = axios.create({
       baseURL: secrets.backendEndpoint,
+      withCredentials: true,
       headers: {
         'Content-Type': 'application/json',
       },
     });
+  }
+
+  async getProfile(showToast = true) {
+    try {
+      const response = await this.client.get('/api/profile');
+      return response.data;
+    } catch (error) {
+      if (showToast) {
+        this.handleError(error);
+      }
+      return null;
+    }
+  }
+
+  async updateProfile(profile: { name: string; email: string; memberSince?: string }) {
+    try {
+      const response = await this.client.put('/api/profile', profile);
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+    }
   }
 
   // currently, only fetches 1 session greater than current time

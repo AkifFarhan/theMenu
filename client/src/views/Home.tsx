@@ -1,13 +1,40 @@
-import React from 'react';
+import { useEffect, useState } from 'react';
 import { Card, Button } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
+import ApiClient from '../api';
+
+const apiClient = new ApiClient();
 
 export default function Home() {
   const navigate = useNavigate();
+  const [userName, setUserName] = useState('Akif');
 
   const inventoryCount = 14;
   const recipesReady = 3;
-  const userName = 'Akif';
+
+  useEffect(() => {
+    const loadUserName = async () => {
+      const savedProfileData = localStorage.getItem('theMenu_user_profile');
+      if (savedProfileData) {
+        const profile = JSON.parse(savedProfileData);
+        if (profile.name) {
+          setUserName(profile.name);
+        }
+      }
+
+      const profile = await apiClient.getProfile(false);
+      if (profile && profile.name) {
+        setUserName(profile.name);
+        localStorage.setItem('theMenu_user_profile', JSON.stringify({
+          name: profile.name,
+          email: profile.email || '',
+          memberSince: profile.memberSince || '',
+        }));
+      }
+    };
+
+    loadUserName();
+  }, []);
 
   return (
     <div className="d-flex flex-column align-items-center" style={{ paddingTop: 80 }}>
