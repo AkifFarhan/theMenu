@@ -84,6 +84,34 @@ body {
   width: 100%;
 }
 
+.home-welcome-btn {
+  border: 1.5px solid #c8912e;
+  background: rgba(255, 253, 248, 0.9);
+  color: #1b2f56;
+  border-radius: 14px;
+  padding: 16px 26px;
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: 0.2px;
+  box-shadow:
+    0 0 0 1px rgba(255, 227, 169, 0.5),
+    0 12px 24px rgba(0, 0, 0, 0.1);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+  width: 400px;
+  max-width: 100%;
+  margin-bottom: 35px;
+  justify-content: center;
+}
+
+.home-welcome-btn:hover,
+.home-welcome-btn:focus-visible {
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 0 1px rgba(255, 227, 169, 0.6),
+    0 16px 30px rgba(0, 0, 0, 0.14);
+  filter: brightness(1.03);
+}
+
 .home-card {
   border: 1.5px solid #c8912e;
   box-shadow:
@@ -303,6 +331,29 @@ footer {
   font-weight: 800;
   letter-spacing: 0.2px;
   color: #1b2f56;
+}
+
+.recipes-page .page-heading {
+  font-size: 28px;
+}
+
+.inventory-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 18px;
+  background: rgba(255, 253, 248, 0.9);
+  color: #1b2f56;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 0.2px;
+  box-shadow:
+    0 10px 20px rgba(0, 0, 0, 0.08),
+    0 0 0 1px rgba(255, 227, 169, 0.5);
+  border: 1.5px solid #c8912e;
+  min-width: 150px;
+  text-align: center;
 }
 
 .btn-navy {

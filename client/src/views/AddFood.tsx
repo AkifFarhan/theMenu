@@ -55,7 +55,7 @@ export default function AddFood() {
 
   return (
     <div className="add-food-wrapper">
-      <h3>Add Food</h3>
+      <div className="inventory-chip add-food-chip">Add Food</div>
 
       <div className="add-food-form">
         <h5>New Item</h5>

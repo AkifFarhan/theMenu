@@ -1,18 +1,22 @@
 import { Card, Button } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Home() {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const inventoryCount = JSON.parse(localStorage.getItem('inventoryItems') || '[]').length;
   const recipesReady = 3;
-  const userName = 'Akif';
+  const userName = user?.username || 'there';
 
   return (
     <section className="home-hero">
       <div className="home-hero__overlay" />
       <div className="home-hero__content d-flex flex-column align-items-center">
-        <h2 className="mb-4">Welcome back, {userName}!</h2>
+        <button className="home-welcome-btn" type="button">
+          Welcome back, {userName}
+        </button>
 
         <div className="d-flex gap-4 flex-wrap" style={{ maxWidth: 1000, width: '100%', justifyContent: 'center' }}>
           <Card className="home-card" style={{ width: 300, cursor: 'pointer' }} onClick={() => navigate('/inventory')}>
