@@ -31,6 +31,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
         return $request->user();
     });
 
+    // Dashboard
+    Route::get('/dashboard/summary', [\App\Http\Controllers\InventoryController::class, 'getDashboardSummary']);
+
     // Inventory Management
     Route::get('/inventory', [\App\Http\Controllers\InventoryController::class, 'getInventory']);
     Route::post('/inventory/bulk', [\App\Http\Controllers\InventoryController::class, 'addInventoryItems']);

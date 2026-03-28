@@ -11,6 +11,29 @@ use Illuminate\Support\Facades\Validator;
 class InventoryController extends Controller
 {
     /**
+     * Get dashboard summary with inventory count and recipes ready
+     */
+    public function getDashboardSummary()
+    {
+        try {
+            $user = Auth::user();
+            
+            $inventoryCount = Inventory::where('user_id', $user->id)->count();
+            $recipesReady = 0; // Can be expanded later with recipe availability logic
+            
+            return response()->json([
+                'inventoryCount' => $inventoryCount,
+                'recipesReady' => $recipesReady
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to fetch dashboard summary',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Get all ingredients from the database
      */
     public function getIngredients()
