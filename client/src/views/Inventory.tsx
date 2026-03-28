@@ -13,14 +13,20 @@ interface Item {
   ingredient_id: number;
 }
 
+interface EditingItem {
+  quantity: string;
+  expiry_date: string;
+}
+
 const api = new ApiClient();
 
 export default function Inventory() {
   const [items, setItems] = useState<Item[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [editId, setEditId] = useState<number | null>(null);
-  const [editData, setEditData] = useState<{ quantity: string; expiry_date: string }>({ quantity: '', expiry_date: '' });
+  const [editingIds, setEditingIds] = useState<Set<number>>(new Set());
+  const [editData, setEditData] = useState<Map<number, EditingItem>>(new Map());
+  const [isSaving, setIsSaving] = useState(false);
   const navigate = useNavigate();
 
   // Check if an item is expired
@@ -49,6 +55,11 @@ export default function Inventory() {
   }, []);
 
   const handleDelete = async (id: number) => {
+    // Show confirmation dialog
+    if (!window.confirm('Are you sure you want to delete this item?')) {
+      return;
+    }
+
     try {
       await api.deleteInventoryItem(id);
       setItems((prev) => prev.filter((item) => item.id !== id));
@@ -59,45 +70,86 @@ export default function Inventory() {
   };
 
   const handleEditStart = (item: Item) => {
-    setEditId(item.id);
-    setEditData({
+    const newEditingIds = new Set(editingIds);
+    newEditingIds.add(item.id);
+    setEditingIds(newEditingIds);
+
+    const newEditData = new Map(editData);
+    newEditData.set(item.id, {
       quantity: item.quantity.toString(),
       expiry_date: item.expiry_date || ''
     });
+    setEditData(newEditData);
   };
 
-  const handleEditSave = async (id: number) => {
-    if (!editData.quantity || isNaN(parseFloat(editData.quantity)) || parseFloat(editData.quantity) <= 0) {
-      toast.error('Please enter a valid quantity');
-      return;
+  const handleEditChange = (id: number, field: 'quantity' | 'expiry_date', value: string) => {
+    const newEditData = new Map(editData);
+    const current = newEditData.get(id) || { quantity: '', expiry_date: '' };
+    newEditData.set(id, { ...current, [field]: value });
+    setEditData(newEditData);
+  };
+
+  const handleEditCancel = (id: number) => {
+    const newEditingIds = new Set(editingIds);
+    newEditingIds.delete(id);
+    setEditingIds(newEditingIds);
+
+    const newEditData = new Map(editData);
+    newEditData.delete(id);
+    setEditData(newEditData);
+  };
+
+  const handleSaveAllChanges = async () => {
+    // Validate all changes
+    for (const [id, data] of editData.entries()) {
+      if (!data.quantity || isNaN(parseFloat(data.quantity)) || parseFloat(data.quantity) <= 0) {
+        toast.error('Please enter valid quantities for all items');
+        return;
+      }
     }
 
+    setIsSaving(true);
     try {
-      await api.updateInventoryItem(id, {
-        quantity: parseFloat(editData.quantity),
-        expiry_date: editData.expiry_date || null
-      });
-      
-      setItems((prev) =>
-        prev.map((item) =>
-          item.id === id
-            ? {
-                ...item,
-                quantity: parseFloat(editData.quantity),
-                expiry_date: editData.expiry_date
-              }
-            : item
-        )
+      const updatePromises = Array.from(editData.entries()).map(([id, data]) =>
+        api.updateInventoryItem(id, {
+          quantity: parseFloat(data.quantity),
+          expiry_date: data.expiry_date || null
+        })
       );
-      setEditId(null);
-      toast.success('Item updated successfully');
+
+      await Promise.all(updatePromises);
+
+      // Update local state
+      setItems((prev) =>
+        prev.map((item) => {
+          const editedData = editData.get(item.id);
+          if (editedData) {
+            return {
+              ...item,
+              quantity: parseFloat(editedData.quantity),
+              expiry_date: editedData.expiry_date
+            };
+          }
+          return item;
+        })
+      );
+
+      setEditingIds(new Set());
+      setEditData(new Map());
+      toast.success('All changes saved successfully');
     } catch {
       // Toast is handled in ApiClient.
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleEditCancel = () => {
-    setEditId(null);
+  const handleDiscardAllChanges = () => {
+    if (!window.confirm('Discard all unsaved changes?')) {
+      return;
+    }
+    setEditingIds(new Set());
+    setEditData(new Map());
   };
 
   return (
@@ -141,79 +193,109 @@ export default function Inventory() {
 
       {/* 3. Data Rows */}
       {!isLoading &&
-        items.map((it) => (
-          <tr key={it.id} className={isExpired(it.expiry_date) ? 'table-danger' : ''}>
-            {editId === it.id ? (
-              <>
-                <td>{it.name}</td>
-                <td>
-                  <Form.Control
-                    size="sm"
-                    type="number"
-                    step="0.01"
-                    value={editData.quantity}
-                    onChange={(e) => setEditData((prev) => ({ ...prev, quantity: e.target.value }))}
-                  />
-                </td>
-                <td>
-                  <Form.Control
-                    size="sm"
-                    type="date"
-                    value={editData.expiry_date}
-                    onChange={(e) => setEditData((prev) => ({ ...prev, expiry_date: e.target.value }))}
-                  />
-                </td>
-                <td>-</td>
-                <td>
-                  <Button
-                    size="sm"
-                    variant="success"
-                    className="me-2"
-                    onClick={() => handleEditSave(it.id)}
-                  >
-                    Save
-                  </Button>
-                  <Button size="sm" variant="secondary" onClick={handleEditCancel}>
-                    Cancel
-                  </Button>
-                </td>
-              </>
-            ) : (
-              <>
-                <td>{it.name}</td>
-                <td>
-                  {it.quantity} {it.unit}
-                </td>
-                <td>{it.expiry_date || '-'}</td>
-                <td>
-                  {isExpired(it.expiry_date) ? (
-                    <Badge bg="danger">Expired</Badge>
-                  ) : it.expiry_date ? (
-                    <Badge bg="success">Good</Badge>
-                  ) : (
-                    <Badge bg="secondary">No date</Badge>
-                  )}
-                </td>
-                <td>
-                  <Button
-                    size="sm"
-                    variant="outline-primary"
-                    className="me-2"
-                    onClick={() => handleEditStart(it)}
-                  >
-                    Edit
-                  </Button>
-                  <Button size="sm" variant="danger" onClick={() => handleDelete(it.id)}>
-                    Delete
-                  </Button>
-                </td>
-              </>
-            )}
-          </tr>
-        ))}
+        items.map((it) => {
+          const isEditing = editingIds.has(it.id);
+          const currentEditData = editData.get(it.id);
+
+          return (
+            <tr key={it.id} className={`${isExpired(it.expiry_date) ? 'table-danger' : ''} ${isEditing ? 'table-light' : ''}`}>
+              {isEditing && currentEditData ? (
+                <>
+                  <td>{it.name}</td>
+                  <td>
+                    <Form.Control
+                      size="sm"
+                      type="number"
+                      step="0.01"
+                      value={currentEditData.quantity}
+                      onChange={(e) => handleEditChange(it.id, 'quantity', e.target.value)}
+                      autoFocus
+                    />
+                  </td>
+                  <td>
+                    <Form.Control
+                      size="sm"
+                      type="date"
+                      value={currentEditData.expiry_date}
+                      onChange={(e) => handleEditChange(it.id, 'expiry_date', e.target.value)}
+                    />
+                  </td>
+                  <td>-</td>
+                  <td>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleEditCancel(it.id)}
+                    >
+                      Cancel
+                    </Button>
+                  </td>
+                </>
+              ) : (
+                <>
+                  <td>{it.name}</td>
+                  <td>
+                    {it.quantity} {it.unit}
+                  </td>
+                  <td>{it.expiry_date || '-'}</td>
+                  <td>
+                    {isExpired(it.expiry_date) ? (
+                      <Badge bg="danger">Expired</Badge>
+                    ) : it.expiry_date ? (
+                      <Badge bg="success">Good</Badge>
+                    ) : (
+                      <Badge bg="secondary">No date</Badge>
+                    )}
+                  </td>
+                  <td>
+                    <Button
+                      size="sm"
+                      variant="outline-primary"
+                      className="me-2"
+                      onClick={() => handleEditStart(it)}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => handleDelete(it.id)}
+                      disabled={editingIds.size > 0}
+                    >
+                      Delete
+                    </Button>
+                  </td>
+                </>
+              )}
+            </tr>
+          );
+        })}
     </tbody>
   </Table>
 </div>
+
+{/* Bulk Action Buttons */}
+{editingIds.size > 0 && (
+  <div className="mt-3 d-flex gap-2 align-items-center">
+    <span className="text-muted">
+      {editingIds.size} item{editingIds.size !== 1 ? 's' : ''} being edited
+    </span>
+    <Button
+      variant="success"
+      onClick={handleSaveAllChanges}
+      disabled={isSaving}
+    >
+      {isSaving ? 'Saving...' : '✓ Update Changes'}
+    </Button>
+    <Button
+      variant="outline-danger"
+      onClick={handleDiscardAllChanges}
+      disabled={isSaving}
+    >
+      ✕ Discard Changes
+    </Button>
+  </div>
+)}
 
 {/* 4. Error Alert */}
 {error && <Alert variant="warning" className="mt-3 mb-0">{error}</Alert>}
