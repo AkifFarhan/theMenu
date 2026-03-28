@@ -5,6 +5,46 @@ import toast from 'react-hot-toast';
 class ApiClient {
   private client: AxiosInstance;
 
+  async getInventory() {
+    try {
+      const response = await this.client.get('/api/inventory');
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+      throw error;
+    }
+  }
+
+  async addInventoryItems(items: Array<{ name: string; quantity: number; unit?: 'g' | 'ml' | 'piece' }>) {
+    try {
+      const response = await this.client.post('/api/inventory/bulk', { items });
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+      throw error;
+    }
+  }
+
+  async deleteInventoryItem(id: number) {
+    try {
+      const response = await this.client.delete(`/api/inventory/${id}`);
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+      throw error;
+    }
+  }
+
+  async getDashboardSummary() {
+    try {
+      const response = await this.client.get('/api/dashboard/summary');
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+      throw error;
+    }
+  }
+
   private extractErrorMessage(error: any): string {
     const responseData = error?.response?.data;
 

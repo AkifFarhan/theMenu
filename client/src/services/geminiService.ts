@@ -114,6 +114,10 @@ Rules:
     if (error instanceof Error) {
       const message = error.message.toLowerCase();
 
+      if (message.includes('reported as leaked') || message.includes('api key was reported as leaked')) {
+        throw new Error('Gemini API key is blocked because it was reported as leaked. Generate a new key and update VITE_GEMINI_API_KEY.');
+      }
+
       if (message.includes('api key') || message.includes('permission_denied') || message.includes('403')) {
         throw new Error('Gemini key/config issue (403). Check if your API key is valid and Generative Language API is enabled.');
       }

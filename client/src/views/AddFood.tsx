@@ -2,18 +2,24 @@ import { useState } from 'react';
 import { Table, Button, Form } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import '../addFood.css';
+import ApiClient from '../api';
+import toast from 'react-hot-toast';
 
 const CATEGORIES = ['Vegetables', 'Meat', 'Dairy', 'Pantry', 'Other'];
+const UNITS = ['g', 'ml', 'piece'] as const;
+type Unit = (typeof UNITS)[number];
 
 interface FoodItem {
   id: number;
   name: string;
   quantity: string;
+  unit: Unit;
   price: string;
   category: string;
 }
 
-const EMPTY_FORM = { name: '', quantity: '', price: '', category: 'Vegetables' };
+const EMPTY_FORM = { name: '', quantity: '', unit: 'piece' as Unit, price: '', category: 'Vegetables' };
+const api = new ApiClient();
 
 export default function AddFood() {
   const navigate = useNavigate();
@@ -32,7 +38,7 @@ export default function AddFood() {
 
   const handleEditStart = (it: FoodItem) => {
     setEditId(it.id);
-    setEditData({ name: it.name, quantity: it.quantity, price: it.price, category: it.category });
+    setEditData({ name: it.name, quantity: it.quantity, unit: it.unit, price: it.price, category: it.category });
   };
 
   const handleEditSave = (id: number) => {
@@ -41,11 +47,33 @@ export default function AddFood() {
   };
 
   const handleConfirm = () => {
-    if (items.length === 0) return;
-    const existing: FoodItem[] = JSON.parse(localStorage.getItem('inventoryItems') || '[]');
-    localStorage.setItem('inventoryItems', JSON.stringify([...existing, ...items]));
-    setItems([]);
-    navigate('/inventory');
+    if (items.length === 0) {
+      return;
+    }
+
+    const payload = items
+      .map((item) => ({
+        name: item.name.trim(),
+        quantity: Number.parseFloat(item.quantity),
+        unit: item.unit,
+      }))
+      .filter((item) => item.name.length > 0 && Number.isFinite(item.quantity) && item.quantity > 0);
+
+    if (payload.length === 0) {
+      toast.error('Add at least one valid item with a numeric quantity.');
+      return;
+    }
+
+    api
+      .addInventoryItems(payload)
+      .then(() => {
+        toast.success('Inventory saved successfully');
+        setItems([]);
+        navigate('/inventory');
+      })
+      .catch(() => {
+        // Toast is handled in ApiClient.
+      });
   };
 
   const totalCost = items.reduce((sum, it) => {
@@ -79,6 +107,16 @@ export default function AddFood() {
           </Form.Group>
 
           <Form.Group className="mb-2">
+            <Form.Label>Unit</Form.Label>
+            <Form.Select
+              value={form.unit}
+              onChange={e => setForm(f => ({ ...f, unit: e.target.value as Unit }))}
+            >
+              {UNITS.map((u) => <option key={u}>{u}</option>)}
+            </Form.Select>
+          </Form.Group>
+
+          <Form.Group className="mb-2">
             <Form.Label>Price</Form.Label>
             <Form.Control
               value={form.price}
@@ -106,6 +144,7 @@ export default function AddFood() {
           <tr>
             <th>Name</th>
             <th>Quantity</th>
+            <th>Unit</th>
             <th>Price</th>
             <th>Category</th>
             <th>Actions</th>
@@ -118,6 +157,11 @@ export default function AddFood() {
                 <>
                   <td><Form.Control size="sm" value={editData.name}     onChange={e => setEditData(d => ({ ...d, name: e.target.value }))} /></td>
                   <td><Form.Control size="sm" value={editData.quantity}  onChange={e => setEditData(d => ({ ...d, quantity: e.target.value }))} /></td>
+                  <td>
+                    <Form.Select size="sm" value={editData.unit} onChange={e => setEditData(d => ({ ...d, unit: e.target.value as Unit }))}>
+                      {UNITS.map(u => <option key={u}>{u}</option>)}
+                    </Form.Select>
+                  </td>
                   <td><Form.Control size="sm" value={editData.price}     onChange={e => setEditData(d => ({ ...d, price: e.target.value }))} /></td>
                   <td>
                     <Form.Select size="sm" value={editData.category} onChange={e => setEditData(d => ({ ...d, category: e.target.value }))}>
@@ -133,6 +177,7 @@ export default function AddFood() {
                 <>
                   <td>{it.name}</td>
                   <td>{it.quantity}</td>
+                  <td>{it.unit}</td>
                   <td>{it.price}</td>
                   <td>{it.category}</td>
                   <td>
