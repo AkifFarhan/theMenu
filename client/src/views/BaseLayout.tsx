@@ -42,8 +42,9 @@ const BaseLayout: React.FC<BaseLayoutProps> = ({ children }) => {
     <div className="layout">
       <header className="navbar navbar-expand-lg navbar-light bg-light fixed-top">
         <div className="container-fluid">
-          <Link className="navbar-brand" to="/">
-            theMenu
+          <Link className="navbar-brand d-flex align-items-center gap-2" to="/">
+            <img src="/logo.png" alt="theMenu logo" height="28" />
+            <span>theMenu</span>
           </Link>
           <div className="d-flex align-items-center ms-auto gap-2">
             <Link to="/profile" className="user-link" style={{ textDecoration: 'none', cursor: 'pointer' }}>

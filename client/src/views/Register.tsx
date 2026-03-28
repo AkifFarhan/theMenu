@@ -41,8 +41,8 @@ const Register: React.FC = () => {
   };
 
   return (
-    <Container className="d-flex justify-content-center align-items-center" style={{ minHeight: '100vh' }}>
-      <Card style={{ width: '400px' }}>
+    <Container fluid className="auth-page d-flex justify-content-center align-items-center">
+      <Card className="auth-card" style={{ width: '400px' }}>
         <Card.Body>
           <h2 className="text-center mb-4">Register for theMenu</h2>
           {error && <Alert variant="danger">{error}</Alert>}

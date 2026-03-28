@@ -129,14 +129,16 @@ export default function Recipes() {
   };
 
   return (
-    <div style={{ paddingTop: 80 }}>
-      <h3>Matchmaker Results</h3>
-
-      <div className="mt-3 d-flex flex-wrap gap-2 align-items-center">
-        <Button variant="secondary" disabled={!canGenerate} onClick={handleGenerate}>
+    <div className="recipes-page page-shell">
+      <div className="d-flex align-items-center justify-content-between gap-2 page-heading-row">
+        <h3 className="page-heading mb-0">Matchmaker Results</h3>
+        <Button className="btn-navy" disabled={!canGenerate} onClick={handleGenerate}>
           Generate Recipes
         </Button>
-        {cooldownSeconds > 0 && <Badge bg="dark">Try again in {cooldownSeconds}s</Badge>}
+      </div>
+
+      <div className="mt-3 d-flex flex-wrap gap-2 align-items-center recipes-actions">
+        {cooldownSeconds > 0 && <Badge bg="dark" className="pill-badge">Try again in {cooldownSeconds}s</Badge>}
       </div>
 
       {inventoryNames.length === 0 && (
@@ -165,18 +167,18 @@ export default function Recipes() {
             const meta = cardMeta[key];
 
             return (
-              <Col key={key} xs={12}>
-                <Card>
+              <Col key={key} xs={12} md={4}>
+                <Card className="recipe-card themed-card h-100">
                   <Card.Body>
                     <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
                       <Card.Title className="mb-0">{meta.title}</Card.Title>
-                      <Badge bg="secondary">{meta.tag}</Badge>
+                      <Badge bg="secondary" className="pill-badge">{meta.tag}</Badge>
                     </div>
-                    <Card.Subtitle className="mt-2 text-muted">{recipe.title}</Card.Subtitle>
-                    <div className="mt-2">
+                    <Card.Subtitle className="mt-2 recipe-subtitle">{recipe.title}</Card.Subtitle>
+                    <div className="mt-3 recipe-meta">
                       <strong>Preparation Time:</strong> {recipe.preparationTime}
                     </div>
-                    <ol className="mt-2 mb-0">
+                    <ol className="mt-2 mb-0 recipe-steps">
                       {recipe.steps.map((step, index) => (
                         <li key={`${key}-${index}`}>{step}</li>
                       ))}

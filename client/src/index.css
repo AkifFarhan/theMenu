@@ -5,11 +5,61 @@
 }
 body {
   font-family: 'Josefin Sans', serif;
-  background-image: url('/home.jpg');
+}
+
+.auth-page {
+  min-height: 100vh;
+  background-image: url('/loginbg.jpg');
   background-size: cover;
-  background-position: center bottom;
+  background-position: center;
   background-repeat: no-repeat;
-  background-attachment: fixed;
+  background-color: #ffffff;
+  padding: 0;
+}
+
+.auth-page.container-fluid {
+  padding: 0;
+}
+
+.auth-card {
+  background: rgba(255, 253, 248, 0.9);
+  border: 1.5px solid #c8912e;
+  box-shadow:
+    0 0 0 1px rgba(255, 227, 169, 0.35),
+    0 18px 38px rgba(189, 144, 60, 0.28),
+    0 8px 16px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(6px);
+  color: #1f2a44;
+}
+
+.auth-card h2 {
+  color: #1f2a44;
+  font-weight: 700;
+}
+
+.auth-card .form-label {
+  color: #1f2a44;
+  font-weight: 600;
+}
+
+.auth-card .btn-primary {
+  background: linear-gradient(135deg, #1b2f56, #172646);
+  border: 1px solid #1b2f56;
+  font-weight: 700;
+}
+
+.auth-card .btn-primary:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12);
+}
+
+.auth-card a {
+  color: #1f2a44;
+  font-weight: 600;
+}
+
+.auth-card a:hover {
+  color: #c78c23;
 }
 
 .home-hero {
@@ -124,6 +174,11 @@ body {
   flex-direction: column;
   min-height: 100vh;
   position: relative;
+  background-image: url('/home.jpg');
+  background-size: cover;
+  background-position: center bottom;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
 }
 
 .layout::before {
@@ -154,6 +209,11 @@ header.navbar {
 
 .navbar-brand:hover {
   color: #c78c23 !important;
+}
+
+.navbar-brand img {
+  display: block;
+  border-radius: 6px;
 }
 
 .navbar .user-link {
@@ -225,4 +285,137 @@ footer {
     padding-left: 300px;
     padding-right: 300px;
   }
+}
+
+/* Shared interior page styling */
+.page-shell {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 90px 20px 60px;
+  color: #1f2a44;
+}
+
+.page-heading-row {
+  gap: 10px;
+}
+
+.page-heading {
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  color: #1b2f56;
+}
+
+.btn-navy {
+  background: linear-gradient(135deg, #1b2f56, #172646);
+  border: 1px solid #1b2f56;
+  font-weight: 800;
+  color: #e7d39e;
+}
+
+.btn-navy:disabled {
+  opacity: 0.7;
+  background: #7c859b;
+  border-color: #7c859b;
+}
+
+.btn-navy:hover:not(:disabled) {
+  filter: brightness(1.05);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.12);
+}
+
+.themed-card {
+  background: rgba(255, 253, 248, 0.92);
+  border: 1.5px solid #c8912e;
+  border-radius: 16px;
+  box-shadow:
+    0 0 0 1px rgba(255, 227, 169, 0.4),
+    0 22px 48px rgba(189, 144, 60, 0.45),
+    0 10px 22px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(3px);
+  padding: 18px;
+}
+
+.themed-table {
+  background: rgba(255, 253, 248, 0.9);
+  border: 1px solid rgba(200, 145, 46, 0.3);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.themed-table th {
+  background: linear-gradient(135deg, rgba(27, 47, 86, 0.9), rgba(23, 38, 70, 0.9));
+  color: #f2dca0;
+  border-color: rgba(200, 145, 46, 0.35);
+  font-weight: 700;
+}
+
+.themed-table td {
+  border-color: rgba(200, 145, 46, 0.25);
+  color: #1f2a44;
+}
+
+.themed-table tbody tr:hover {
+  background: rgba(255, 248, 232, 0.7);
+}
+
+.inventory-page .btn-outline-secondary,
+.recipes-page .btn-outline-secondary {
+  color: #1f2a44;
+  border-color: #d6b26f;
+  background: rgba(255, 255, 255, 0.75);
+  font-weight: 600;
+}
+
+.inventory-page .btn-outline-secondary:hover,
+.recipes-page .btn-outline-secondary:hover {
+  color: #fff;
+  background: linear-gradient(135deg, #1b2f56, #172646);
+  border-color: #1b2f56;
+}
+
+.inventory-page .btn-danger,
+.recipes-page .btn-danger {
+  background: linear-gradient(135deg, #b9322c, #9d2724);
+  border: 1px solid #9d2724;
+  font-weight: 700;
+}
+
+.inventory-page .btn-danger:hover,
+.recipes-page .btn-danger:hover {
+  filter: brightness(1.05);
+}
+
+.pill-badge {
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-weight: 700;
+}
+
+.recipes-page .badge.bg-secondary {
+  background: linear-gradient(135deg, #c78c23, #a8741a) !important;
+  color: #1f2a44;
+}
+
+.recipes-page .badge.bg-dark {
+  background: rgba(27, 47, 86, 0.9) !important;
+  border: 1px solid rgba(255, 227, 169, 0.5);
+}
+
+.recipe-card .card-title {
+  color: #1b2f56;
+  font-weight: 800;
+}
+
+.recipe-subtitle {
+  color: #1f2a44 !important;
+  font-weight: 700;
+}
+
+.recipe-meta strong {
+  color: #1b2f56;
+}
+
+.recipe-steps {
+  color: #1f2a44;
+  padding-left: 18px;
 }
