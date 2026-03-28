@@ -46,8 +46,8 @@ const BaseLayout: React.FC<BaseLayoutProps> = ({ children }) => {
             theMenu
           </Link>
           <div className="d-flex align-items-center ms-auto gap-2">
-            <Link to="/profile" style={{ textDecoration: 'none', cursor: 'pointer' }}>
-              <div className="me-2" style={{ cursor: 'pointer', color: '#007bff' }}>
+            <Link to="/profile" className="user-link" style={{ textDecoration: 'none', cursor: 'pointer' }}>
+              <div className="me-2" style={{ cursor: 'pointer' }}>
                 {user.username}
               </div>
             </Link>
@@ -59,6 +59,11 @@ const BaseLayout: React.FC<BaseLayoutProps> = ({ children }) => {
       </header>
 
       <main className="main-content">{children}</main>
+
+      <footer className="site-footer">
+        <a className="site-footer__link" href="#">Contact us.</a>
+        <span className="site-footer__copy">© Copyright theMenu</span>
+      </footer>
     </div>
   );
 };
