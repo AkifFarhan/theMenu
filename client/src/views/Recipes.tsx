@@ -99,6 +99,15 @@ export default function Recipes() {
       if (message.includes('429')) {
         setRecipes(localFallbackRecipes(inventoryNames));
         setError('Gemini is rate-limited right now. Showing local fallback recipes.');
+      } else if (
+        message.includes('403') ||
+        message.toLowerCase().includes('api key') ||
+        message.toLowerCase().includes('permission') ||
+        message.toLowerCase().includes('leaked') ||
+        message.toLowerCase().includes('missing vite_gemini_api_key')
+      ) {
+        setRecipes(localFallbackRecipes(inventoryNames));
+        setError(`${message} Showing local fallback recipes for now.`);
       } else {
         setError(message);
       }
