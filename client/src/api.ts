@@ -5,6 +5,28 @@ import toast from 'react-hot-toast';
 class ApiClient {
   private client: AxiosInstance;
 
+  private extractErrorMessage(error: any): string {
+    const responseData = error?.response?.data;
+
+    if (typeof responseData?.message === 'string' && responseData.message.trim().length > 0) {
+      return responseData.message;
+    }
+
+    const validationErrors = responseData?.errors;
+    if (validationErrors && typeof validationErrors === 'object') {
+      const firstErrorGroup = Object.values(validationErrors)[0];
+      if (Array.isArray(firstErrorGroup) && typeof firstErrorGroup[0] === 'string') {
+        return firstErrorGroup[0];
+      }
+    }
+
+    if (typeof error?.message === 'string' && error.message.trim().length > 0) {
+      return error.message;
+    }
+
+    return 'Something went wrong';
+  }
+
   constructor() {
     this.client = axios.create({
       baseURL: secrets.backendEndpoint,
@@ -159,9 +181,11 @@ class ApiClient {
 
   // Handle common errors
   handleError(error: any) {
+    const message = this.extractErrorMessage(error);
+
     if (error.response) {
       // Server responded with a status other than 2xx
-      console.error(`API Error: ${error.response.status} - ${error.response.data.message}`);
+      console.error(`API Error: ${error.response.status} - ${message}`);
     } else if (error.request) {
       // Request was made, but no response was received
       console.error('API Error: No response received', error.request);
@@ -170,7 +194,7 @@ class ApiClient {
       console.error('API Error:', error.message);
     }
 
-    toast.error(error.message || 'Something went wrong');
+    toast.error(message);
   }
 }
 
