@@ -1,41 +1,70 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { Button } from "react-bootstrap";
 import { Link, useNavigate } from "react-router-dom";
-import { CreateSessionDialog } from "./CreateSessionDialog";
+import ApiClient from "../api";
+import toast from "react-hot-toast";
 
 interface BaseLayoutProps {
   children: ReactNode;
 }
 
+const api = new ApiClient();
+
 const BaseLayout: React.FC<BaseLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [user, setUser] = useState<{ username: string; email: string } | null>(null);
+
+  useEffect(() => {
+    // Check if user is authenticated
+    if (!api.isAuthenticated()) {
+      navigate('/login');
+      return;
+    }
+
+    // Get user data from localStorage
+    const currentUser = api.getCurrentUser();
+    setUser(currentUser);
+  }, [navigate]);
+
+  const handleLogout = async () => {
+    const success = await api.logout();
+    if (success) {
+      toast.success('Logged out successfully');
+      navigate('/login');
+    }
+  };
+
+  if (!user) {
+    return null; // or a loading spinner
+  }
 
   return (
     <div className="layout">
-      <header className="d-flex align-items-center my-1 bg-light navbar-mx">
-        <h3>
-          <Link className="text-decoration-none text-dark" to="/">
-            Attendance
+      <header className="navbar navbar-expand-lg navbar-light bg-light fixed-top">
+        <div className="container-fluid">
+          <Link className="navbar-brand d-flex align-items-center gap-2" to="/">
+            <img src="/logo.png" alt="theMenu logo" height="28" />
+            <span>theMenu</span>
           </Link>
-        </h3>
-        <div className="flex-grow-1"></div>
-        <nav>
-          <ul className="nav">
-            <li className="nav-item">
-              <Button variant="outline-secondary" className="me-2" onClick={() => navigate("/sessions")}>
-                Sessions
-              </Button>
-              <Button variant="success" className="text-white" onClick={() => setIsCreateDialogOpen(true)}>
-                Create
-              </Button>
-            </li>
-          </ul>
-        </nav>
+          <div className="d-flex align-items-center ms-auto gap-2">
+            <Link to="/profile" className="user-link" style={{ textDecoration: 'none', cursor: 'pointer' }}>
+              <div className="me-2" style={{ cursor: 'pointer' }}>
+                {user.username}
+              </div>
+            </Link>
+            <Button variant="outline-secondary" size="sm" onClick={handleLogout}>
+              Logout
+            </Button>
+          </div>
+        </div>
       </header>
-      <main id="content">{children}</main>
 
-      <CreateSessionDialog open={isCreateDialogOpen} setOpen={setIsCreateDialogOpen} />
+      <main className="main-content">{children}</main>
+
+      <footer className="site-footer">
+        <a className="site-footer__link" href="#">Contact us.</a>
+        <span className="site-footer__copy">© Copyright theMenu</span>
+      </footer>
     </div>
   );
 };

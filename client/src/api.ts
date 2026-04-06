@@ -5,6 +5,88 @@ import toast from 'react-hot-toast';
 class ApiClient {
   private client: AxiosInstance;
 
+  async getInventory() {
+    try {
+      const response = await this.client.get('/api/inventory');
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+      throw error;
+    }
+  }
+
+  async getIngredients() {
+    try {
+      const response = await this.client.get('/api/ingredients');
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+      throw error;
+    }
+  }
+
+  async addInventoryItems(items: Array<{ ingredient_id: number; quantity: number; expiry_date?: string }>) {
+    try {
+      const response = await this.client.post('/api/inventory/bulk', { items });
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+      throw error;
+    }
+  }
+
+  async deleteInventoryItem(id: number) {
+    try {
+      const response = await this.client.delete(`/api/inventory/${id}`);
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+      throw error;
+    }
+  }
+
+  async updateInventoryItem(id: number, data: { quantity?: number; expiry_date?: string | null }) {
+    try {
+      const response = await this.client.put(`/api/inventory/${id}`, data);
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+      throw error;
+    }
+  }
+
+  async getDashboardSummary() {
+    try {
+      const response = await this.client.get('/api/dashboard/summary');
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+      throw error;
+    }
+  }
+
+  private extractErrorMessage(error: any): string {
+    const responseData = error?.response?.data;
+
+    if (typeof responseData?.message === 'string' && responseData.message.trim().length > 0) {
+      return responseData.message;
+    }
+
+    const validationErrors = responseData?.errors;
+    if (validationErrors && typeof validationErrors === 'object') {
+      const firstErrorGroup = Object.values(validationErrors)[0];
+      if (Array.isArray(firstErrorGroup) && typeof firstErrorGroup[0] === 'string') {
+        return firstErrorGroup[0];
+      }
+    }
+
+    if (typeof error?.message === 'string' && error.message.trim().length > 0) {
+      return error.message;
+    }
+
+    return 'Something went wrong';
+  }
+
   constructor() {
     this.client = axios.create({
       baseURL: secrets.backendEndpoint,
@@ -12,6 +94,28 @@ class ApiClient {
         'Content-Type': 'application/json',
       },
     });
+
+    // Add token to requests if it exists
+    this.client.interceptors.request.use((config) => {
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    });
+
+    // Handle 401 errors (unauthorized)
+    this.client.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response?.status === 401) {
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('user');
+          window.location.href = '/login';
+        }
+        return Promise.reject(error);
+      }
+    );
   }
 
   // currently, only fetches 1 session greater than current time
@@ -73,11 +177,78 @@ class ApiClient {
     }
   }
 
+  // Authentication methods
+  async register(username: string, email: string, password: string) {
+    try {
+      const response = await this.client.post('/api/register', { username, email, password });
+      if (response.data.token) {
+        localStorage.setItem('auth_token', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+      }
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+      throw error;
+    }
+  }
+
+  async login(email: string, password: string) {
+    try {
+      const response = await this.client.post('/api/login', { email, password });
+      if (response.data.token) {
+        localStorage.setItem('auth_token', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+      }
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+      throw error;
+    }
+  }
+
+  async logout() {
+    try {
+      await this.client.post('/api/logout');
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('user');
+      return true;
+    } catch (error) {
+      this.handleError(error);
+      // Even if the network fails, clear local auth so the user can fully log out client-side.
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('user');
+      return true;
+    }
+  }
+
+  async getMe() {
+    try {
+      const response = await this.client.get('/api/me');
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+      throw error;
+    }
+  }
+
+  // Check if user is authenticated
+  isAuthenticated(): boolean {
+    return !!localStorage.getItem('auth_token');
+  }
+
+  // Get current user from localStorage
+  getCurrentUser() {
+    const userStr = localStorage.getItem('user');
+    return userStr ? JSON.parse(userStr) : null;
+  }
+
   // Handle common errors
   handleError(error: any) {
+    const message = this.extractErrorMessage(error);
+
     if (error.response) {
       // Server responded with a status other than 2xx
-      console.error(`API Error: ${error.response.status} - ${error.response.data.message}`);
+      console.error(`API Error: ${error.response.status} - ${message}`);
     } else if (error.request) {
       // Request was made, but no response was received
       console.error('API Error: No response received', error.request);
@@ -86,7 +257,7 @@ class ApiClient {
       console.error('API Error:', error.message);
     }
 
-    toast.error(error.message || 'Something went wrong');
+    toast.error(message);
   }
 }
 

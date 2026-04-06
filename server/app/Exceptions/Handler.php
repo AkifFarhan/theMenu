@@ -3,6 +3,10 @@
 namespace App\Exceptions;
 
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+use Illuminate\Auth\AuthenticationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -48,12 +52,17 @@ class Handler extends ExceptionHandler
      */
     public function render($request, Throwable $exception)
     {
+        if (!$request->expectsJson() && !$request->is('api/*')) {
+            return parent::render($request, $exception);
+        }
+
+        $status = $this->getStatusCode($exception);
         $message = $this->getMessage($exception);
 
         return response()->json([
             'success' => false,
             'message' => $message,
-        ], 200);
+        ], $status);
     }
 
 
@@ -67,14 +76,46 @@ class Handler extends ExceptionHandler
     protected function getMessage(Throwable $exception): string
     {
         if ($exception instanceof ValidationException) {
-            return 'Validation failed.';
+            return $exception->getMessage() ?: 'Validation failed.';
         }
 
         if ($exception instanceof ModelNotFoundException) {
             return 'Resource not found.';
         }
 
+        if ($exception instanceof AuthenticationException) {
+            return 'Unauthenticated.';
+        }
+
+        if (!$this->container->has('config') || !$this->container['config']->get('app.debug', false)) {
+            return 'An unexpected error occurred.';
+        }
+
         return $exception->getMessage() ?: 'An unexpected error occurred.';
+    }
+
+    /**
+     * Get an HTTP status code for a known exception type.
+     */
+    protected function getStatusCode(Throwable $exception): int
+    {
+        if ($exception instanceof ValidationException) {
+            return 422;
+        }
+
+        if ($exception instanceof AuthenticationException) {
+            return 401;
+        }
+
+        if ($exception instanceof ModelNotFoundException) {
+            return 404;
+        }
+
+        if ($exception instanceof HttpExceptionInterface) {
+            return $exception->getStatusCode();
+        }
+
+        return 500;
     }
 
 }

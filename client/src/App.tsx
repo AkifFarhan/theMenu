@@ -1,6 +1,12 @@
 import { Outlet, Route, Routes } from 'react-router';
 import BaseLayout from './views/BaseLayout';
 import Home from './views/Home';
+import Inventory from './views/Inventory';
+import AddFood from './views/AddFood';
+import Recipes from './views/Recipes';
+import Profile from './views/Profile';
+import Login from './views/Login';
+import Register from './views/Register';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './index.css';
 import { Toaster } from 'react-hot-toast';
@@ -10,6 +16,11 @@ function App() {
   return (
     <>
       <Routes>
+        {/* Auth routes without BaseLayout */}
+        <Route path={'/login'} element={<Login />} />
+        <Route path={'/register'} element={<Register />} />
+        
+        {/* Protected routes with BaseLayout */}
         <Route
           element={
             <BaseLayout>
@@ -18,7 +29,11 @@ function App() {
           }
         >
           <Route path={'/'} element={<Home />} />
+          <Route path={'/inventory'} element={<Inventory />} />
+          <Route path={'/add-food'} element={<AddFood />} />
+          <Route path={'/recipes'} element={<Recipes />} />
           <Route path={'/sessions'} element={<Sessions />} />
+          <Route path={'/profile'} element={<Profile />} />
         </Route>
       </Routes>
       <Toaster

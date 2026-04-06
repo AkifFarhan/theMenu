@@ -3,6 +3,177 @@
 
 ---
 
+## Quick Setup Guide
+
+### Prerequisites
+
+Before setting up the project, ensure you have the following installed:
+
+- **PHP** >= 8.0 with extensions: `pdo`, `mbstring`, `xml`, `bcmath`, `curl`
+- **Composer** (PHP dependency manager)
+- **MySQL** >= 5.7 or **MariaDB** >= 10.3
+- **Node.js** >= 16.x and **npm** >= 8.x
+- **Git**
+
+### Installation Steps
+
+#### 1. Clone the Repository
+```bash
+git clone <repository-url>
+cd theMenu
+```
+
+#### 2. Backend Setup (Laravel)
+
+```bash
+cd server
+
+# Install PHP dependencies
+composer install
+
+# Copy environment file
+copy .env.example .env    # Windows
+# cp .env.example .env    # Mac/Linux
+
+# Generate application key
+php artisan key:generate
+```
+
+#### 3. Database Configuration
+
+**Option A: MySQL (Recommended for Production)**
+
+1. Create a MySQL database:
+```bash
+Create a database named 'themenu'
+Copy the queries from 001_init_tables.sql and run it
+```
+
+2. Edit `server/.env` with your database credentials:
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=themenu
+DB_USERNAME=root
+DB_PASSWORD=
+```
+
+3. Create the migrations table:
+```bash
+php artisan migrate:install
+```
+
+#### 4. Frontend Setup (React + Vite)
+
+```bash
+cd ../client
+
+# Install Node.js dependencies
+npm install
+
+# Copy environment file if needed
+copy .env.example .env    # Windows (if exists)
+```
+
+#### 5. Start Development Servers
+
+**Terminal 1 - Backend (Laravel):**
+```bash
+cd server
+php artisan serve
+# Server runs at http://127.0.0.1:8000
+```
+
+**Terminal 2 - Frontend (React):**
+```bash
+cd client
+npm run dev
+# App runs at http://localhost:5173
+```
+
+#### 6. Verify Setup
+
+- Backend API: http://127.0.0.1:8000
+- Frontend App: http://localhost:5173
+- Test database connection:
+
+---
+
+## Authentication System
+
+theMenu includes a complete authentication system using Laravel Sanctum for API token management.
+
+### Features
+
+- **User Registration** - Create new accounts with username, email, and password
+- **User Login** - Authenticate with email and password to receive a bearer token
+- **Token-based Authentication** - Secure API access using Laravel Sanctum tokens
+- **Automatic Token Handling** - Frontend automatically includes tokens in all API requests
+- **Session Management** - Logout functionality revokes current access token
+- **Protected Routes** - Frontend routes require authentication to access
+
+### API Endpoints
+
+**Public Routes:**
+- `POST /api/register` - Register new user
+  ```json
+  {
+    "username": "john_doe",
+    "email": "john@example.com",
+    "password": "password123"
+  }
+  ```
+
+- `POST /api/login` - Login user
+  ```json
+  {
+    "email": "john@example.com",
+    "password": "password123"
+  }
+  ```
+
+**Protected Routes (Require Bearer Token):**
+- `POST /api/logout` - Logout current user
+- `GET /api/me` - Get authenticated user information
+
+### Frontend Pages
+
+- `/login` - Login page
+- `/register` - Registration page
+- All other routes require authentication and redirect to login if not authenticated
+
+### Usage
+
+1. Start the application
+2. Navigate to http://localhost:5173
+3. You'll be redirected to the login page
+4. Register a new account or login with existing credentials
+5. Upon successful authentication, you'll be redirected to the home page
+6. Your authentication token is stored in localStorage
+7. Click "Logout" in the navbar to sign out
+
+---
+
+## Common Issues
+
+**"vendor/autoload.php not found"**
+- Run `composer install` in the `server` folder
+
+**"APP_KEY is missing"**
+- Run `php artisan key:generate`
+
+**Database connection errors**
+- Verify MySQL is running
+- Check `.env` credentials match your MySQL setup
+- Ensure database exists: `CREATE DATABASE smart_recipe;`
+
+**Port already in use**
+- Laravel: `php artisan serve --port=8001`
+- Vite: Edit `client/vite.config.ts` to change port
+
+---
+
 ## Introduction
 
 Every day, people buy groceries without fully planning their meals, leading to food waste, overspending, and decision fatigue in the kitchen. At the same time, many unique recipes remain undiscovered or unused within small groups of users.
