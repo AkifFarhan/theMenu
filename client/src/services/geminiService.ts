@@ -1,16 +1,27 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+export type RecipeType = 'quick' | 'healthy' | 'surprise';
+
+export interface RecipeIngredient {
+  item: string;
+  amount: number;
+  unit: string;
+}
+
 export interface GeneratedRecipe {
+  type: RecipeType;
   title: string;
   preparationTime: string;
+  baseServings: 1;
+  ingredients: RecipeIngredient[];
   steps: string[];
 }
 
 interface GeminiRecipeResponse {
-  quick: GeneratedRecipe;
-  healthy: GeneratedRecipe;
-  surprise: GeneratedRecipe;
+  recipes: GeneratedRecipe[];
 }
+
+const RECIPE_TYPES: RecipeType[] = ['quick', 'healthy', 'surprise'];
 
 const MODEL_CANDIDATES = ['gemini-2.0-flash', 'gemini-flash-latest', 'gemini-2.5-flash'] as const;
 
@@ -48,6 +59,50 @@ function getGeminiClient(): GoogleGenerativeAI {
   return new GoogleGenerativeAI(apiKey);
 }
 
+function normalizeIngredient(entry: Partial<RecipeIngredient> | undefined): RecipeIngredient | null {
+  const item = String(entry?.item ?? '').trim();
+  const unit = String(entry?.unit ?? '').trim();
+  const amount = Number(entry?.amount);
+
+  if (!item || !unit || !Number.isFinite(amount) || amount <= 0) {
+    return null;
+  }
+
+  return {
+    item,
+    amount,
+    unit,
+  };
+}
+
+function normalizeRecipe(recipe: Partial<GeneratedRecipe> | undefined, fallbackType: RecipeType): GeneratedRecipe {
+  const normalizedType = RECIPE_TYPES.includes(recipe?.type as RecipeType)
+    ? (recipe?.type as RecipeType)
+    : fallbackType;
+
+  const ingredients = Array.isArray(recipe?.ingredients)
+    ? recipe.ingredients
+        .map((entry) => normalizeIngredient(entry))
+        .filter((entry): entry is RecipeIngredient => entry !== null)
+    : [];
+
+  const normalizedSteps = Array.isArray(recipe?.steps)
+    ? recipe.steps.map((step) => String(step).trim()).filter(Boolean).slice(0, 3)
+    : [];
+
+  const fallbackSteps = ['Prepare your ingredients.', 'Cook with medium heat until done.', 'Serve immediately.'];
+  const steps = normalizedSteps.length === 3 ? normalizedSteps : fallbackSteps;
+
+  return {
+    type: normalizedType,
+    title: String(recipe?.title ?? `${fallbackType} recipe`).trim() || `${fallbackType} recipe`,
+    preparationTime: String(recipe?.preparationTime ?? '20 mins').trim() || '20 mins',
+    baseServings: 1,
+    ingredients,
+    steps,
+  };
+}
+
 export async function getRecipesFromInventory(inventoryArray: string[]): Promise<GeminiRecipeResponse> {
   if (!Array.isArray(inventoryArray) || inventoryArray.length === 0) {
     throw new Error('Please add ingredients to your inventory first.');
@@ -61,17 +116,51 @@ export async function getRecipesFromInventory(inventoryArray: string[]): Promise
   const genAI = getGeminiClient();
 
   const prompt = `I have these ingredients: ${ingredients}.
-Suggest 3 distinct recipes and classify them as quick, healthy, and surprise.
+Role: You are a Culinary Data Engineer Agent.
+
+Task: Based on the provided ingredient list, suggest 3 distinct recipes classified as quick, healthy, and surprise.
+
+Core Logic Rules:
+- The Single-Person Rule is mandatory: calculate all ingredient measurements for exactly one person.
+- Data integrity is mandatory: ingredients must be structured as item, amount, unit with amount as a positive number.
+- Pantry matching is mandatory: use only provided inventory ingredients, but common staples (salt, water, oil) are allowed.
+- Structure is mandatory: each recipe must have exactly 3 concise steps.
+
 Respond with ONLY valid JSON in this exact structure:
 {
-  "quick": { "title": "", "preparationTime": "", "steps": ["", "", ""] },
-  "healthy": { "title": "", "preparationTime": "", "steps": ["", "", ""] },
-  "surprise": { "title": "", "preparationTime": "", "steps": ["", "", ""] }
-}
-Rules:
-- Keep each recipe concise.
-- Each recipe must include exactly 3 simple steps.
-- Use only ingredients that are plausible given the pantry list.`;
+  "recipes": [
+    {
+      "type": "quick",
+      "title": "",
+      "preparationTime": "15 mins",
+      "baseServings": 1,
+      "ingredients": [
+        { "item": "", "amount": 0.5, "unit": "cup" }
+      ],
+      "steps": ["", "", ""]
+    },
+    {
+      "type": "healthy",
+      "title": "",
+      "preparationTime": "20 mins",
+      "baseServings": 1,
+      "ingredients": [
+        { "item": "", "amount": 100, "unit": "grams" }
+      ],
+      "steps": ["", "", ""]
+    },
+    {
+      "type": "surprise",
+      "title": "",
+      "preparationTime": "25 mins",
+      "baseServings": 1,
+      "ingredients": [
+        { "item": "", "amount": 1, "unit": "piece" }
+      ],
+      "steps": ["", "", ""]
+    }
+  ]
+}`;
 
   try {
     let result: Awaited<ReturnType<ReturnType<GoogleGenerativeAI['getGenerativeModel']>['generateContent']>> | null = null;
@@ -101,9 +190,19 @@ Rules:
     const response = await result.response;
     const text = response.text();
     const jsonText = extractJsonBlock(text);
-    const parsed = JSON.parse(jsonText) as GeminiRecipeResponse;
+    const parsed = JSON.parse(jsonText) as Partial<GeminiRecipeResponse>;
 
-    return parsed;
+    const recipeByType = new Map<RecipeType, GeneratedRecipe>();
+    const incomingRecipes = Array.isArray(parsed.recipes) ? parsed.recipes : [];
+
+    for (const fallbackType of RECIPE_TYPES) {
+      const match = incomingRecipes.find((recipe) => recipe?.type === fallbackType);
+      recipeByType.set(fallbackType, normalizeRecipe(match, fallbackType));
+    }
+
+    return {
+      recipes: RECIPE_TYPES.map((type) => recipeByType.get(type) as GeneratedRecipe),
+    };
   } catch (error: unknown) {
     console.error('Gemini Error:', error);
 
