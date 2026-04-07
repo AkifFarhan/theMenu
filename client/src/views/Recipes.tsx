@@ -94,6 +94,75 @@ function toBaseAmount(amount: number, unit: string, baseUnit: string): number | 
   return null;
 }
 
+function getRecipeMatchStats(recipe: GeneratedRecipe, inventoryItems: Item[], peopleCount: number): {
+  totalIngredients: number;
+  matchingIngredients: number;
+  matchPercentage: number;
+} {
+  const inventoryByIngredientId = new Map<number, Item>();
+  const inventoryByName = new Map<string, Item>();
+
+  for (const item of inventoryItems) {
+    const ingredientId = Number(item?.ingredient_id);
+    if (Number.isFinite(ingredientId) && ingredientId > 0) {
+      inventoryByIngredientId.set(ingredientId, item);
+    }
+
+    const normalizedName = String(item?.name ?? '').trim().toLowerCase();
+    if (!inventoryByName.has(normalizedName)) {
+      inventoryByName.set(normalizedName, item);
+    }
+  }
+
+  let totalIngredients = 0;
+  let matchingIngredients = 0;
+
+  for (const ingredient of recipe.ingredients ?? []) {
+    const normalizedName = String(ingredient?.item ?? '').trim().toLowerCase();
+    if (!normalizedName || STAPLES.has(normalizedName)) {
+      continue;
+    }
+
+    totalIngredients++;
+
+    const requiredAmount = Number(ingredient?.amount ?? 0) * peopleCount;
+
+    const inventoryItem =
+      (typeof ingredient.ingredientId === 'number' && ingredient.ingredientId > 0
+        ? inventoryByIngredientId.get(ingredient.ingredientId)
+        : undefined) || inventoryByName.get(normalizedName);
+
+    if (!inventoryItem) {
+      continue;
+    }
+
+    const requiredInInventoryUnit = toBaseAmount(requiredAmount, String(ingredient?.unit ?? 'piece'), inventoryItem.unit);
+    const availableQuantity = Number(inventoryItem?.quantity ?? 0);
+
+    if (
+      Number.isFinite(availableQuantity) &&
+      requiredInInventoryUnit !== null &&
+      availableQuantity + 0.0001 >= requiredInInventoryUnit
+    ) {
+      matchingIngredients++;
+    }
+  }
+
+  if (totalIngredients === 0) {
+    return {
+      totalIngredients: 0,
+      matchingIngredients: 0,
+      matchPercentage: 0,
+    };
+  }
+
+  return {
+    totalIngredients,
+    matchingIngredients,
+    matchPercentage: Math.round((matchingIngredients / totalIngredients) * 100),
+  };
+}
+
 function getRecipeCookability(recipe: GeneratedRecipe, inventoryItems: Item[], peopleCount: number): RecipeCookability {
   const inventoryByIngredientId = new Map<number, Item>();
   const inventoryByName = new Map<string, Item>();
@@ -477,73 +546,95 @@ export default function Recipes() {
       )}
 
       {recipes && recipes.length > 0 && (
-        <Row className="mt-3 g-3">
-          {recipes.map((recipe, recipeIndex) => {
-            const recipeType = normalizeRecipeType(recipe.type);
-            const meta = cardMeta[recipeType];
-            const recipeKey = `${recipe.type}-${recipe.title}-${recipeIndex}`;
-            const cookability = getRecipeCookability(recipe, inventoryItems, peopleCount);
-            const isCooking = cookingRecipeKey === recipeKey;
-            const canCookNow = cookability.canCook && Boolean(recipe.id) && !isLoading && !isCooking;
+        <>
+          {recipes.every((recipe) => {
+            const stats = getRecipeMatchStats(recipe, inventoryItems, peopleCount);
+            return stats.totalIngredients < 3 || stats.matchPercentage < 70;
+          }) && (
+            <Alert variant="warning" className="mt-3">
+              None of the generated recipes meet the 70% ingredient match threshold with at least 3 recipe ingredients. Try adding more ingredients to your inventory or generating new recipes.
+            </Alert>
+          )}
+          <Row className="mt-3 g-3">
+            {recipes
+              .map((recipe, recipeIndex) => {
+                const matchStats = getRecipeMatchStats(recipe, inventoryItems, peopleCount);
+                return { recipe, recipeIndex, matchStats };
+              })
+              .filter(({ matchStats }) => matchStats.totalIngredients >= 3 && matchStats.matchPercentage >= 70)
+              .map(({ recipe, recipeIndex, matchStats }) => {
+                const recipeType = normalizeRecipeType(recipe.type);
+                const meta = cardMeta[recipeType];
+                const recipeKey = `${recipe.type}-${recipe.title}-${recipeIndex}`;
+                const cookability = getRecipeCookability(recipe, inventoryItems, peopleCount);
+                const isCooking = cookingRecipeKey === recipeKey;
+                const canCookNow = cookability.canCook && Boolean(recipe.id) && !isLoading && !isCooking;
+                const matchPercentage = matchStats.matchPercentage;
 
-            return (
-              <Col key={recipeKey} xs={12} md={4}>
-                <Card className="recipe-card themed-card h-100">
-                  <Card.Body>
-                    <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                      <Card.Title className="mb-0">Recipe Card {recipeIndex + 1}</Card.Title>
-                      <Badge bg="secondary" className="pill-badge">{meta.tag}</Badge>
-                    </div>
-                    <Card.Subtitle className="mt-2 recipe-subtitle">{recipe.title}</Card.Subtitle>
-                    <div className="mt-3 recipe-meta">
-                      <strong>Preparation Time:</strong> {recipe.preparationTime}
-                    </div>
-                    <div className="mt-1 recipe-meta">
-                      <strong>Base Servings:</strong> {recipe.baseServings}
-                    </div>
-                    <div className="mt-1 recipe-meta">
-                      <strong>Needed for {peopleCount} {peopleCount === 1 ? 'person' : 'people'}:</strong>
-                    </div>
-                    <ul className="mt-1 mb-0">
-                      {(recipe.ingredients ?? []).map((ingredient, index) => {
-                        const scaledAmount = ingredient.amount * peopleCount;
-                        const readableAmount = formatAmount(scaledAmount);
+                return (
+                  <Col key={recipeKey} xs={12} md={4}>
+                    <Card className="recipe-card themed-card h-100">
+                      <Card.Body>
+                        <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                          <Card.Title className="mb-0">Recipe Card {recipeIndex + 1}</Card.Title>
+                          <Badge bg="secondary" className="pill-badge">{meta.tag}</Badge>
+                        </div>
+                        <div className="mt-2 d-flex gap-2 align-items-center">
+                          <Badge bg={matchPercentage === 100 ? 'success' : matchPercentage >= 80 ? 'info' : 'warning'}>
+                            {matchPercentage}% match
+                          </Badge>
+                        </div>
+                        <Card.Subtitle className="mt-2 recipe-subtitle">{recipe.title}</Card.Subtitle>
+                        <div className="mt-3 recipe-meta">
+                          <strong>Preparation Time:</strong> {recipe.preparationTime}
+                        </div>
+                        <div className="mt-1 recipe-meta">
+                          <strong>Base Servings:</strong> {recipe.baseServings}
+                        </div>
+                        <div className="mt-1 recipe-meta">
+                          <strong>Needed for {peopleCount} {peopleCount === 1 ? 'person' : 'people'}:</strong>
+                        </div>
+                        <ul className="mt-1 mb-0">
+                          {(recipe.ingredients ?? []).map((ingredient, index) => {
+                            const scaledAmount = ingredient.amount * peopleCount;
+                            const readableAmount = formatAmount(scaledAmount);
 
-                        return (
-                          <li key={`${recipeType}-ingredient-${index}`}>
-                            {ingredient.item}: {readableAmount} {ingredient.unit}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    <ol className="mt-2 mb-0 recipe-steps">
-                      {(recipe.steps ?? []).map((step, index) => (
-                        <li key={`${recipeType}-${index}`}>{step}</li>
-                      ))}
-                    </ol>
-                    {!canCookNow && cookability.missingIngredients.length > 0 && (
-                      <div className="mt-3 small text-danger">
-                        Missing: {cookability.missingIngredients[0].item} ({formatAmount(cookability.missingIngredients[0].available)} {cookability.missingIngredients[0].availableUnit} available)
-                      </div>
-                    )}
-                    {!recipe.id && (
-                      <div className="mt-3 small text-muted">
-                        Save this recipe first before cooking with auto deduction.
-                      </div>
-                    )}
-                    <Button
-                      className="btn-navy mt-3"
-                      disabled={!canCookNow || cookingRecipeKey !== null}
-                      onClick={() => handleCook(recipe, recipeKey)}
-                    >
-                      {isCooking ? 'Cooking...' : 'Cook & Auto Deduct'}
-                    </Button>
-                  </Card.Body>
-                </Card>
-              </Col>
-            );
-          })}
-        </Row>
+                            return (
+                              <li key={`${recipeType}-ingredient-${index}`}>
+                                {ingredient.item}: {readableAmount} {ingredient.unit}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                        <ol className="mt-2 mb-0 recipe-steps">
+                          {(recipe.steps ?? []).map((step, index) => (
+                            <li key={`${recipeType}-${index}`}>{step}</li>
+                          ))}
+                        </ol>
+                        {!canCookNow && cookability.missingIngredients.length > 0 && (
+                          <div className="mt-3 small text-danger">
+                            Missing: {cookability.missingIngredients[0].item} ({formatAmount(cookability.missingIngredients[0].available)} {cookability.missingIngredients[0].availableUnit} available)
+                          </div>
+                        )}
+                        {!recipe.id && (
+                          <div className="mt-3 small text-muted">
+                            Save this recipe first before cooking with auto deduction.
+                          </div>
+                        )}
+                        <Button
+                          className="btn-navy mt-3"
+                          disabled={!canCookNow || cookingRecipeKey !== null}
+                          onClick={() => handleCook(recipe, recipeKey)}
+                        >
+                          {isCooking ? 'Cooking...' : 'Cook & Auto Deduct'}
+                        </Button>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                );
+              })}
+          </Row>
+        </>
       )}
     </div>
   );
