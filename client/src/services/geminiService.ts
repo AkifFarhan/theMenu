@@ -119,11 +119,13 @@ export async function getRecipesFromInventory(inventoryArray: string[]): Promise
 Role: You are a Culinary Data Engineer Agent.
 
 Task: Based on the provided ingredient list, suggest 3 distinct recipes classified as quick, healthy, and surprise.
+Healthy Output Requirement: Exactly 2 recipes must be healthy-focused. The "healthy" recipe and the "surprise" recipe must both be healthy choices.
 
 Core Logic Rules:
 - The Single-Person Rule is mandatory: calculate all ingredient measurements for exactly one person.
 - Data integrity is mandatory: ingredients must be structured as item, amount, unit with amount as a positive number.
 - Pantry matching is mandatory: use only provided inventory ingredients, but common staples (salt, water, oil) are allowed.
+- Healthy recipe rules are mandatory for "healthy" and "surprise": keep them nutrient-dense, use minimal oil, and avoid deep-fried or heavily processed ingredients.
 - Structure is mandatory: each recipe must have exactly 3 concise steps.
 
 Respond with ONLY valid JSON in this exact structure:
