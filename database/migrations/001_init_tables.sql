@@ -20,17 +20,18 @@ CREATE TABLE users (
 -- SANCTUM TOKENS
 -- ==========================================
 CREATE TABLE personal_access_tokens (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    tokenable_type VARCHAR(255) NOT NULL,
-    tokenable_id BIGINT UNSIGNED NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    token VARCHAR(64) NOT NULL UNIQUE,
-    abilities TEXT NULL,
-    last_used_at TIMESTAMP NULL,
-    created_at TIMESTAMP NULL,
-    updated_at TIMESTAMP NULL,
-    INDEX personal_access_tokens_tokenable_type_tokenable_id_index (tokenable_type, tokenable_id)
+    id BIGINT IDENTITY(1,1) PRIMARY KEY,
+    tokenable_type NVARCHAR(255) NOT NULL,
+    tokenable_id BIGINT NOT NULL,
+    name NVARCHAR(255) NOT NULL,
+    token NVARCHAR(64) NOT NULL UNIQUE,
+    abilities NVARCHAR(MAX) NULL,
+    last_used_at DATETIME NULL,
+    created_at DATETIME DEFAULT GETDATE(),
+    updated_at DATETIME DEFAULT GETDATE()
 );
+
+CREATE INDEX idx_pat_tokenable ON personal_access_tokens(tokenable_type, tokenable_id);
 
 -- ==========================================
 -- INGREDIENTS (GLOBAL NORMALIZED LIST)
@@ -77,12 +78,18 @@ CREATE INDEX idx_inventory_ingredient ON inventories(ingredient_id);
 -- ==========================================
 CREATE TABLE recipes (
     id BIGINT IDENTITY(1,1) PRIMARY KEY,
+    recipe_type NVARCHAR(20) NOT NULL,
     title NVARCHAR(200) NOT NULL,
+    preparation_time NVARCHAR(50) NOT NULL,
+    base_servings INT NOT NULL DEFAULT 1,
     description NVARCHAR(MAX) NULL,
     is_ai_generated BIT DEFAULT 1,
     created_by BIGINT NULL,
     created_at DATETIME DEFAULT GETDATE(),
     updated_at DATETIME DEFAULT GETDATE(),
+
+    CONSTRAINT chk_recipe_type CHECK (recipe_type IN ('quick', 'healthy', 'surprise')),
+    CONSTRAINT chk_base_servings CHECK (base_servings = 1),
 
     CONSTRAINT fk_recipe_user
         FOREIGN KEY (created_by) REFERENCES users(id)
@@ -97,8 +104,11 @@ CREATE INDEX idx_recipe_title ON recipes(title);
 CREATE TABLE recipe_ingredients (
     id BIGINT IDENTITY(1,1) PRIMARY KEY,
     recipe_id BIGINT NOT NULL,
-    ingredient_id BIGINT NOT NULL,
-    required_quantity DECIMAL(10,2) NOT NULL,
+    ingredient_id BIGINT NULL,
+    item_name NVARCHAR(150) NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    unit NVARCHAR(30) NOT NULL,
+    required_quantity DECIMAL(10,2) NULL,
     created_at DATETIME DEFAULT GETDATE(),
     updated_at DATETIME DEFAULT GETDATE(),
 
@@ -108,13 +118,14 @@ CREATE TABLE recipe_ingredients (
 
     CONSTRAINT fk_recipeingredient_ingredient
         FOREIGN KEY (ingredient_id) REFERENCES ingredients(id)
-        ON DELETE CASCADE,
+        ON DELETE SET NULL,
 
-    CONSTRAINT unique_recipe_ingredient UNIQUE (recipe_id, ingredient_id)
+    CONSTRAINT chk_recipeingredient_amount CHECK (amount > 0)
 );
 
 CREATE INDEX idx_recipeingredient_recipe ON recipe_ingredients(recipe_id);
 CREATE INDEX idx_recipeingredient_ingredient ON recipe_ingredients(ingredient_id);
+CREATE INDEX idx_recipeingredient_item_name ON recipe_ingredients(item_name);
 
 -- ==========================================
 -- INSTRUCTIONS
@@ -141,9 +152,12 @@ CREATE TABLE cooking_logs (
     id BIGINT IDENTITY(1,1) PRIMARY KEY,
     user_id BIGINT NOT NULL,
     recipe_id BIGINT NOT NULL,
+    people_count INT NOT NULL DEFAULT 1,
     scaling_factor DECIMAL(5,2) DEFAULT 1.00,
     auto_deducted BIT DEFAULT 0,
     cooked_at DATETIME DEFAULT GETDATE(),
+
+    CONSTRAINT chk_people_count CHECK (people_count >= 1),
 
     CONSTRAINT fk_cooking_user
         FOREIGN KEY (user_id) REFERENCES users(id)

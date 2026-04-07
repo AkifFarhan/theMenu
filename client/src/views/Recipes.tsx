@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Button, Card, Col, Row, Spinner } from 'react-bootstrap';
+import { Alert, Badge, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import { getRecipesFromInventory, type GeneratedRecipe } from '../services/geminiService';
 import ApiClient from '../api';
 
@@ -10,61 +10,77 @@ interface Item {
   category?: string;
 }
 
-interface RecipeBuckets {
-  quick: GeneratedRecipe;
-  healthy: GeneratedRecipe;
-  surprise: GeneratedRecipe;
-}
-
-function localFallbackRecipes(items: string[]): RecipeBuckets {
+function localFallbackRecipes(items: string[]): GeneratedRecipe[] {
   const base = items.slice(0, 4);
   const core = base.length > 0 ? base.join(', ') : 'pantry staples';
 
-  return {
-    quick: {
+  return [
+    {
+      type: 'quick',
       title: `Fast Skillet with ${base[0] || 'Pantry Mix'}`,
-      preparationTime: '15-20 minutes',
+      preparationTime: '15 mins',
+      baseServings: 1,
+      ingredients: [
+        { item: base[0] || 'Mixed vegetables', amount: 120, unit: 'grams' },
+        { item: base[1] || 'Rice', amount: 0.5, unit: 'cup' },
+        { item: 'Oil', amount: 1, unit: 'tbsp' },
+      ],
       steps: [
         `Chop ${core} into bite-sized pieces.`,
         'Saute everything in a hot pan with oil, salt, and pepper.',
         'Finish with a squeeze of lemon or soy sauce and serve warm.',
       ],
     },
-    healthy: {
+    {
+      type: 'healthy',
       title: `${base[1] || 'Veggie'} Power Bowl`,
-      preparationTime: '20-25 minutes',
+      preparationTime: '20 mins',
+      baseServings: 1,
+      ingredients: [
+        { item: base[1] || 'Leafy greens', amount: 80, unit: 'grams' },
+        { item: base[2] || 'Protein', amount: 100, unit: 'grams' },
+        { item: 'Olive oil', amount: 1, unit: 'tbsp' },
+      ],
       steps: [
         `Steam or lightly roast ${core}.`,
         'Toss with a light dressing using olive oil, vinegar, and herbs.',
         'Top with protein from your inventory and serve as a bowl.',
       ],
     },
-    surprise: {
+    {
+      type: 'surprise',
       title: `Creative ${base[2] || 'Kitchen'} Wrap`,
-      preparationTime: '20 minutes',
+      preparationTime: '25 mins',
+      baseServings: 1,
+      ingredients: [
+        { item: base[2] || 'Filling mix', amount: 100, unit: 'grams' },
+        { item: 'Wrap', amount: 1, unit: 'piece' },
+        { item: base[3] || 'Crunchy topping', amount: 40, unit: 'grams' },
+      ],
       steps: [
         `Cook and season ${core} until aromatic.`,
         'Layer into bread, wrap, or lettuce leaves with crunchy toppings.',
         'Roll, slice, and serve with a quick dip from your pantry.',
       ],
     },
-  };
+  ];
 }
 
 const api = new ApiClient();
 
 const cardMeta = {
-  quick: { title: 'Recipe Card 1', tag: 'Quick' },
-  healthy: { title: 'Recipe Card 2', tag: 'Healthy' },
-  surprise: { title: 'Recipe Card 3', tag: 'Surprise' },
+  quick: { tag: 'Quick' },
+  healthy: { tag: 'Healthy' },
+  surprise: { tag: 'Surprise' },
 } as const;
 
 export default function Recipes() {
-  const [recipes, setRecipes] = useState<RecipeBuckets | null>(null);
+  const [recipes, setRecipes] = useState<GeneratedRecipe[] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [inventoryNames, setInventoryNames] = useState<string[]>([]);
+  const [peopleCount, setPeopleCount] = useState(1);
 
   useEffect(() => {
     const loadInventory = async () => {
@@ -76,6 +92,21 @@ export default function Recipes() {
               .filter((name: string | undefined): name is string => Boolean(name))
           : [];
         setInventoryNames(names);
+
+        if (names.length > 0) {
+          try {
+            const savedRecipesResponse = await api.getMatchingRecipes();
+            const savedRecipes = Array.isArray(savedRecipesResponse?.recipes)
+              ? (savedRecipesResponse.recipes as GeneratedRecipe[])
+              : [];
+
+            if (savedRecipes.length > 0) {
+              setRecipes(savedRecipes);
+            }
+          } catch {
+            // Keep page usable if saved recipe lookup fails.
+          }
+        }
       } catch {
         setInventoryNames([]);
       }
@@ -105,11 +136,34 @@ export default function Recipes() {
 
     try {
       const generated = await getRecipesFromInventory(inventoryNames);
-      setRecipes(generated);
+
+      try {
+        const savedResponse = await api.saveGeneratedRecipes(generated.recipes);
+        const savedRecipes = Array.isArray(savedResponse?.recipes)
+          ? (savedResponse.recipes as GeneratedRecipe[])
+          : generated.recipes;
+        setRecipes(savedRecipes);
+      } catch (saveErr: unknown) {
+        setRecipes(generated.recipes);
+
+        const typedSaveError = saveErr as {
+          response?: { data?: { message?: string; error?: string } };
+          message?: string;
+        };
+
+        const detailedMessage =
+          typedSaveError?.response?.data?.error ||
+          typedSaveError?.response?.data?.message ||
+          typedSaveError?.message ||
+          'Recipe generated, but failed to save to database.';
+
+        setError(`Recipe generated, but failed to save to database. ${detailedMessage}`);
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to generate recipes right now.';
       if (message.includes('429')) {
-        setRecipes(localFallbackRecipes(inventoryNames));
+        const fallbackRecipes = localFallbackRecipes(inventoryNames);
+        setRecipes(fallbackRecipes);
         setError('Gemini is rate-limited right now. Showing local fallback recipes.');
       } else if (
         message.includes('403') ||
@@ -118,7 +172,8 @@ export default function Recipes() {
         message.toLowerCase().includes('leaked') ||
         message.toLowerCase().includes('missing vite_gemini_api_key')
       ) {
-        setRecipes(localFallbackRecipes(inventoryNames));
+        const fallbackRecipes = localFallbackRecipes(inventoryNames);
+        setRecipes(fallbackRecipes);
         setError(`${message} Showing local fallback recipes for now.`);
       } else {
         setError(message);
@@ -132,9 +187,24 @@ export default function Recipes() {
     <div className="recipes-page page-shell">
       <div className="d-flex align-items-center justify-content-between gap-2 page-heading-row">
         <div className="inventory-chip">Matchmaker Results</div>
-        <Button className="btn-navy" disabled={!canGenerate} onClick={handleGenerate}>
-          Generate Recipes
-        </Button>
+        <div className="d-flex align-items-end gap-2">
+          <Form.Group controlId="peopleCount" className="mb-0">
+            <Form.Label className="mb-1">Cooking For</Form.Label>
+            <Form.Control
+              type="number"
+              min={1}
+              max={50}
+              value={peopleCount}
+              onChange={(event) => {
+                const parsed = Number.parseInt(event.target.value, 10);
+                setPeopleCount(Number.isFinite(parsed) && parsed > 0 ? parsed : 1);
+              }}
+            />
+          </Form.Group>
+          <Button className="btn-navy" disabled={!canGenerate} onClick={handleGenerate}>
+            Generate Recipes
+          </Button>
+        </div>
       </div>
 
       <div className="mt-3 d-flex flex-wrap gap-2 align-items-center recipes-actions">
@@ -160,27 +230,47 @@ export default function Recipes() {
         </Alert>
       )}
 
-      {recipes && (
+      {recipes && recipes.length > 0 && (
         <Row className="mt-3 g-3">
-          {(Object.keys(cardMeta) as Array<keyof RecipeBuckets>).map((key) => {
-            const recipe = recipes[key];
-            const meta = cardMeta[key];
+          {recipes.map((recipe, recipeIndex) => {
+            const meta = cardMeta[recipe.type];
+            const recipeKey = `${recipe.type}-${recipe.title}-${recipeIndex}`;
 
             return (
-              <Col key={key} xs={12} md={4}>
+              <Col key={recipeKey} xs={12} md={4}>
                 <Card className="recipe-card themed-card h-100">
                   <Card.Body>
                     <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                      <Card.Title className="mb-0">{meta.title}</Card.Title>
+                      <Card.Title className="mb-0">Recipe Card {recipeIndex + 1}</Card.Title>
                       <Badge bg="secondary" className="pill-badge">{meta.tag}</Badge>
                     </div>
                     <Card.Subtitle className="mt-2 recipe-subtitle">{recipe.title}</Card.Subtitle>
                     <div className="mt-3 recipe-meta">
                       <strong>Preparation Time:</strong> {recipe.preparationTime}
                     </div>
+                    <div className="mt-1 recipe-meta">
+                      <strong>Base Servings:</strong> {recipe.baseServings}
+                    </div>
+                    <div className="mt-1 recipe-meta">
+                      <strong>Needed for {peopleCount} {peopleCount === 1 ? 'person' : 'people'}:</strong>
+                    </div>
+                    <ul className="mt-1 mb-0">
+                      {recipe.ingredients.map((ingredient, index) => {
+                        const scaledAmount = ingredient.amount * peopleCount;
+                        const readableAmount = Number.isInteger(scaledAmount)
+                          ? scaledAmount.toString()
+                          : scaledAmount.toFixed(2).replace(/\.00$/, '');
+
+                        return (
+                          <li key={`${recipe.type}-ingredient-${index}`}>
+                            {ingredient.item}: {readableAmount} {ingredient.unit}
+                          </li>
+                        );
+                      })}
+                    </ul>
                     <ol className="mt-2 mb-0 recipe-steps">
                       {recipe.steps.map((step, index) => (
-                        <li key={`${key}-${index}`}>{step}</li>
+                        <li key={`${recipe.type}-${index}`}>{step}</li>
                       ))}
                     </ol>
                   </Card.Body>

@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\RecipeController;
 
 /*
 |--------------------------------------------------------------------------
@@ -39,4 +40,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/inventory/bulk', [\App\Http\Controllers\InventoryController::class, 'addInventoryItems']);
     Route::delete('/inventory/{id}', [\App\Http\Controllers\InventoryController::class, 'deleteInventoryItem']);
     Route::put('/inventory/{id}', [\App\Http\Controllers\InventoryController::class, 'updateInventoryItem']);
+
+    // Recipes
+    Route::get('/recipes/matching', [RecipeController::class, 'getMatchingRecipes']);
+    Route::post('/recipes/generated', [RecipeController::class, 'saveGeneratedRecipes']);
 });

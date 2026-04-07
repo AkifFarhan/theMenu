@@ -2,6 +2,23 @@ import axios, { AxiosInstance } from 'axios';
 import { secrets } from './secrets';
 import toast from 'react-hot-toast';
 
+type RecipeType = 'quick' | 'healthy' | 'surprise';
+
+interface RecipePayloadIngredient {
+  item: string;
+  amount: number;
+  unit: string;
+}
+
+interface RecipePayload {
+  type: RecipeType;
+  title: string;
+  preparationTime: string;
+  baseServings: 1;
+  ingredients: RecipePayloadIngredient[];
+  steps: string[];
+}
+
 class ApiClient {
   private client: AxiosInstance;
 
@@ -58,6 +75,26 @@ class ApiClient {
   async getDashboardSummary() {
     try {
       const response = await this.client.get('/api/dashboard/summary');
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+      throw error;
+    }
+  }
+
+  async getMatchingRecipes() {
+    try {
+      const response = await this.client.get('/api/recipes/matching');
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+      throw error;
+    }
+  }
+
+  async saveGeneratedRecipes(recipes: RecipePayload[]) {
+    try {
+      const response = await this.client.post('/api/recipes/generated', { recipes });
       return response.data;
     } catch (error) {
       this.handleError(error);
