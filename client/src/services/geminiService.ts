@@ -13,6 +13,7 @@ export interface GeneratedRecipe {
   id?: number;
   type: RecipeType;
   title: string;
+  description?: string;
   preparationTime: string;
   baseServings: 1;
   ingredients: RecipeIngredient[];
@@ -249,6 +250,7 @@ Respond with ONLY valid JSON in this exact structure:
     {
       "type": "quick",
       "title": "",
+      "description": "",
       "preparationTime": "15 mins",
       "baseServings": 1,
       "ingredients": [
@@ -259,6 +261,7 @@ Respond with ONLY valid JSON in this exact structure:
     {
       "type": "healthy",
       "title": "",
+      "description": "",
       "preparationTime": "20 mins",
       "baseServings": 1,
       "ingredients": [
@@ -269,6 +272,7 @@ Respond with ONLY valid JSON in this exact structure:
     {
       "type": "surprise",
       "title": "",
+      "description": "",
       "preparationTime": "25 mins",
       "baseServings": 1,
       "ingredients": [
@@ -377,6 +381,9 @@ function normalizeRecipe(
   return {
     type: normalizedType,
     title: String(recipe?.title ?? `${fallbackType} recipe`).trim() || `${fallbackType} recipe`,
+    description:
+      String(recipe?.description ?? '').trim() ||
+      `${String(recipe?.title ?? `${fallbackType} recipe`).trim() || `${fallbackType} recipe`} for one person.`,
     preparationTime: String(recipe?.preparationTime ?? '20 mins').trim() || '20 mins',
     baseServings: 1,
     ingredients,

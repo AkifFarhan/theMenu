@@ -216,6 +216,7 @@ class RecipeController extends Controller
             'recipes' => 'required|array|size:3',
             'recipes.*.type' => 'required|string|in:quick,healthy,surprise',
             'recipes.*.title' => 'required|string|max:200',
+            'recipes.*.description' => 'nullable|string|max:1000',
             'recipes.*.preparationTime' => 'required|string|max:50',
             'recipes.*.baseServings' => 'required|integer|in:1',
             'recipes.*.ingredients' => 'required|array|min:1',
@@ -241,9 +242,11 @@ class RecipeController extends Controller
 
             DB::transaction(function () use ($payloadRecipes, $user, &$saved) {
                 foreach ($payloadRecipes as $payloadRecipe) {
+                    $recipeDescription = $this->buildRecipeDescription($payloadRecipe);
+
                     $recipeData = [
                         'title' => $payloadRecipe['title'],
-                        'description' => null,
+                        'description' => $recipeDescription,
                         'is_ai_generated' => 1,
                         'created_by' => $user->id,
                     ];
@@ -360,6 +363,7 @@ class RecipeController extends Controller
             'id' => $recipe->id,
             'type' => $hasRecipeType ? $recipe->recipe_type : 'quick',
             'title' => $recipe->title,
+            'description' => (string) ($recipe->description ?? ''),
             'preparationTime' => $hasPreparationTime ? $recipe->preparation_time : '20 mins',
             'baseServings' => 1,
             'ingredients' => $recipe->recipeIngredients
@@ -383,6 +387,31 @@ class RecipeController extends Controller
                 ->values()
                 ->all(),
         ];
+    }
+
+    private function buildRecipeDescription(array $payloadRecipe): string
+    {
+        $provided = trim((string) ($payloadRecipe['description'] ?? ''));
+        if ($provided !== '') {
+            return $provided;
+        }
+
+        $title = trim((string) ($payloadRecipe['title'] ?? 'Delicious recipe'));
+        $prepTime = trim((string) ($payloadRecipe['preparationTime'] ?? '20 mins'));
+
+        $ingredientNames = collect($payloadRecipe['ingredients'] ?? [])
+            ->map(fn ($ingredient) => trim((string) ($ingredient['item'] ?? '')))
+            ->filter(fn ($name) => $name !== '')
+            ->unique()
+            ->take(3)
+            ->values()
+            ->all();
+
+        $ingredientText = count($ingredientNames) > 0
+            ? implode(', ', $ingredientNames)
+            : 'pantry staples';
+
+        return "{$title} is a one-person {$prepTime} meal using {$ingredientText}.";
     }
 
     private function evaluateRecipeAvailability(Recipe $recipe, Collection $inventoryItems, int $peopleCount): array
