@@ -9,7 +9,9 @@ use App\Models\Recipe;
 use App\Models\RecipeIngredient;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 
@@ -25,66 +27,186 @@ class RecipeController extends Controller
             $user = Auth::user();
             $this->ensureRecipeSchema();
 
-            $inventoryNames = Inventory::where('user_id', $user->id)
-                ->with('ingredient:id,name')
-                ->get()
-                ->map(fn ($item) => strtolower(trim((string) $item->ingredient?->name)))
-                ->filter(fn ($name) => $name !== '')
-                ->unique()
-                ->values()
-                ->all();
+            $inventoryItems = Inventory::where('user_id', $user->id)
+                ->with('ingredient:id,name,base_unit')
+                ->get();
 
-            if (count($inventoryNames) === 0) {
+            if ($inventoryItems->isEmpty()) {
                 return response()->json(['recipes' => []], 200);
             }
-
-            $inventoryLookup = array_fill_keys($inventoryNames, true);
 
             $recipes = Recipe::where('is_ai_generated', 1)
                 ->with(['recipeIngredients.ingredient', 'instructions'])
                 ->orderByDesc('id')
                 ->get();
 
-            $matching = $recipes->filter(function (Recipe $recipe) use ($inventoryLookup) {
-                $ingredients = $recipe->recipeIngredients;
+            $matching = $recipes
+                ->map(function (Recipe $recipe) use ($inventoryItems) {
+                    $availability = $this->evaluateRecipeAvailability($recipe, $inventoryItems, 1);
 
-                if ($ingredients->isEmpty()) {
-                    return false;
-                }
-
-                $requiredNonStaples = $ingredients
-                    ->map(function (RecipeIngredient $ingredient) {
-                        $name = $this->hasColumn('recipe_ingredients', 'item_name')
-                            ? (string) $ingredient->item_name
-                            : (string) ($ingredient->ingredient?->name ?? '');
-
-                        return strtolower(trim($name));
-                    })
-                    ->filter(fn ($name) => $name !== '' && !in_array($name, $this->staples, true))
-                    ->unique()
-                    ->values();
-
-                if ($requiredNonStaples->isEmpty()) {
-                    return true;
-                }
-
-                foreach ($requiredNonStaples as $name) {
-                    if (!isset($inventoryLookup[$name])) {
-                        return false;
-                    }
-                }
-
-                return true;
-            })->values();
+                    return [
+                        'recipe' => $recipe,
+                        'availability' => $availability,
+                    ];
+                })
+                ->filter(fn (array $entry) => $entry['availability']['canCook'] === true)
+                ->values();
 
             return response()->json([
-                'recipes' => $matching->map(fn (Recipe $recipe) => $this->formatRecipe($recipe))->all(),
+                'recipes' => $matching
+                    ->map(function (array $entry) {
+                        return array_merge(
+                            $this->formatRecipe($entry['recipe']),
+                            [
+                                'canCook' => true,
+                                'missingIngredients' => [],
+                            ]
+                        );
+                    })
+                    ->all(),
             ], 200);
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Failed to fetch matching recipes',
                 'error' => $e->getMessage(),
             ], 500);
+        }
+    }
+
+    public function cookRecipe(Request $request, int $id)
+    {
+        $validator = Validator::make($request->all(), [
+            'people_count' => 'required|integer|min:1|max:50',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        try {
+            $user = Auth::user();
+            $this->ensureRecipeSchema();
+            $peopleCount = (int) $request->input('people_count', 1);
+
+            $result = DB::transaction(function () use ($id, $user, $peopleCount) {
+                $recipe = Recipe::with(['recipeIngredients.ingredient', 'instructions'])->find($id);
+
+                if (!$recipe) {
+                    return [
+                        'status' => 404,
+                        'payload' => [
+                            'message' => 'Recipe not found',
+                        ],
+                    ];
+                }
+
+                $inventoryItems = Inventory::where('user_id', $user->id)
+                    ->with('ingredient:id,name,base_unit')
+                    ->lockForUpdate()
+                    ->get();
+
+                $availability = $this->evaluateRecipeAvailability($recipe, $inventoryItems, $peopleCount);
+
+                if ($availability['canCook'] !== true) {
+                    return [
+                        'status' => 422,
+                        'payload' => [
+                            'message' => 'Insufficient ingredients for this recipe and serving size.',
+                            'missingIngredients' => $availability['missingIngredients'],
+                        ],
+                    ];
+                }
+
+                foreach ($availability['deductions'] as $deduction) {
+                    /** @var Inventory|null $inventoryItem */
+                    $inventoryItem = $inventoryItems->firstWhere('id', $deduction['inventory_id']);
+
+                    if (!$inventoryItem) {
+                        continue;
+                    }
+
+                    $updatedQuantity = (float) $inventoryItem->quantity - (float) $deduction['amount'];
+                    if ($updatedQuantity <= 0.0001) {
+                        $inventoryItem->delete();
+                        continue;
+                    }
+
+                    $inventoryItem->quantity = round($updatedQuantity, 2);
+                    $inventoryItem->save();
+                }
+
+                $this->insertCookingLogSafely($user->id, $recipe->id, $peopleCount);
+
+                return [
+                    'status' => 200,
+                    'payload' => [
+                        'message' => 'Recipe cooked and inventory auto-deducted successfully.',
+                        'recipeId' => $recipe->id,
+                        'peopleCount' => $peopleCount,
+                    ],
+                ];
+            });
+
+            return response()->json($result['payload'], $result['status']);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to cook recipe: ' . $e->getMessage(),
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    private function insertCookingLogSafely(int $userId, int $recipeId, int $peopleCount): void
+    {
+        if (!Schema::hasTable('cooking_logs')) {
+            return;
+        }
+
+        try {
+            $payload = [];
+
+            if (Schema::hasColumn('cooking_logs', 'user_id')) {
+                $payload['user_id'] = $userId;
+            }
+
+            if (Schema::hasColumn('cooking_logs', 'recipe_id')) {
+                $payload['recipe_id'] = $recipeId;
+            }
+
+            if (Schema::hasColumn('cooking_logs', 'people_count')) {
+                $payload['people_count'] = $peopleCount;
+            }
+
+            if (Schema::hasColumn('cooking_logs', 'scaling_factor')) {
+                $payload['scaling_factor'] = $peopleCount;
+            }
+
+            if (Schema::hasColumn('cooking_logs', 'auto_deducted')) {
+                $payload['auto_deducted'] = 1;
+            }
+
+            if (Schema::hasColumn('cooking_logs', 'cooked_at')) {
+                $payload['cooked_at'] = now();
+            }
+
+            if (Schema::hasColumn('cooking_logs', 'created_at')) {
+                $payload['created_at'] = now();
+            }
+
+            if (Schema::hasColumn('cooking_logs', 'updated_at')) {
+                $payload['updated_at'] = now();
+            }
+
+            if ($payload !== []) {
+                DB::table('cooking_logs')->insert($payload);
+            }
+        } catch (\Exception $exception) {
+            Log::warning('Cooking log insert skipped', [
+                'message' => $exception->getMessage(),
+            ]);
         }
     }
 
@@ -143,8 +265,18 @@ class RecipeController extends Controller
                     $aggregatedIngredients = [];
                     foreach ($payloadRecipe['ingredients'] as $ingredientPayload) {
                         $name = trim((string) $ingredientPayload['item']);
-                        $unit = trim((string) $ingredientPayload['unit']);
                         $amount = (float) $ingredientPayload['amount'];
+                        $normalizedMeasurement = $this->normalizeToDatabaseMeasurement(
+                            $amount,
+                            (string) $ingredientPayload['unit']
+                        );
+
+                        if ($normalizedMeasurement === null) {
+                            continue;
+                        }
+
+                        $unit = $normalizedMeasurement['unit'];
+                        $normalizedAmount = $normalizedMeasurement['amount'];
                         $key = strtolower($name) . '|' . strtolower($unit);
 
                         if (!isset($aggregatedIngredients[$key])) {
@@ -155,7 +287,7 @@ class RecipeController extends Controller
                             ];
                         }
 
-                        $aggregatedIngredients[$key]['amount'] += $amount;
+                        $aggregatedIngredients[$key]['amount'] += $normalizedAmount;
                     }
 
                     foreach (array_values($aggregatedIngredients) as $ingredientPayload) {
@@ -225,12 +357,14 @@ class RecipeController extends Controller
         $hasItemName = $this->hasColumn('recipe_ingredients', 'item_name');
 
         return [
+            'id' => $recipe->id,
             'type' => $hasRecipeType ? $recipe->recipe_type : 'quick',
             'title' => $recipe->title,
             'preparationTime' => $hasPreparationTime ? $recipe->preparation_time : '20 mins',
             'baseServings' => 1,
             'ingredients' => $recipe->recipeIngredients
                 ->map(fn (RecipeIngredient $ingredient) => [
+                    'ingredientId' => $ingredient->ingredient_id,
                     'item' => $hasItemName
                         ? $ingredient->item_name
                         : (string) ($ingredient->ingredient?->name ?? 'Unknown item'),
@@ -249,6 +383,215 @@ class RecipeController extends Controller
                 ->values()
                 ->all(),
         ];
+    }
+
+    private function evaluateRecipeAvailability(Recipe $recipe, Collection $inventoryItems, int $peopleCount): array
+    {
+        if ($recipe->recipeIngredients->isEmpty()) {
+            return [
+                'canCook' => false,
+                'missingIngredients' => [
+                    [
+                        'item' => 'Recipe ingredients',
+                        'required' => 1,
+                        'unit' => 'set',
+                        'available' => 0,
+                        'availableUnit' => 'set',
+                    ],
+                ],
+                'deductions' => [],
+            ];
+        }
+
+        [$inventoryByIngredientId, $inventoryByName] = $this->buildInventoryLookups($inventoryItems);
+        $missing = [];
+        $deductions = [];
+
+        foreach ($recipe->recipeIngredients as $recipeIngredient) {
+            $ingredientName = $this->getRecipeIngredientName($recipeIngredient);
+            $normalizedName = strtolower(trim($ingredientName));
+
+            if ($normalizedName === '' || in_array($normalizedName, $this->staples, true)) {
+                continue;
+            }
+
+            $requiredAmount = $this->getRecipeIngredientAmount($recipeIngredient) * $peopleCount;
+            $requiredUnit = $this->getRecipeIngredientUnit($recipeIngredient);
+
+            /** @var Inventory|null $inventoryItem */
+            $inventoryItem = null;
+            if ($recipeIngredient->ingredient_id !== null && isset($inventoryByIngredientId[$recipeIngredient->ingredient_id])) {
+                $inventoryItem = $inventoryByIngredientId[$recipeIngredient->ingredient_id];
+            } elseif (isset($inventoryByName[$normalizedName])) {
+                $inventoryItem = $inventoryByName[$normalizedName];
+            }
+
+            if (!$inventoryItem) {
+                $missing[] = [
+                    'item' => $ingredientName,
+                    'required' => round($requiredAmount, 2),
+                    'unit' => $requiredUnit,
+                    'available' => 0,
+                    'availableUnit' => $this->normalizeBaseUnit($requiredUnit),
+                ];
+                continue;
+            }
+
+            $inventoryUnit = (string) ($inventoryItem->ingredient?->base_unit ?? 'piece');
+            $requiredInInventoryUnit = $this->convertAmountToBase($requiredAmount, $requiredUnit, $inventoryUnit);
+
+            if ($requiredInInventoryUnit === null) {
+                $missing[] = [
+                    'item' => $ingredientName,
+                    'required' => round($requiredAmount, 2),
+                    'unit' => $requiredUnit,
+                    'available' => (float) $inventoryItem->quantity,
+                    'availableUnit' => $inventoryUnit,
+                ];
+                continue;
+            }
+
+            $availableQuantity = (float) $inventoryItem->quantity;
+            if ($availableQuantity + 0.0001 < $requiredInInventoryUnit) {
+                $missing[] = [
+                    'item' => $ingredientName,
+                    'required' => round($requiredInInventoryUnit, 2),
+                    'unit' => $inventoryUnit,
+                    'available' => round($availableQuantity, 2),
+                    'availableUnit' => $inventoryUnit,
+                ];
+                continue;
+            }
+
+            if (!isset($deductions[$inventoryItem->id])) {
+                $deductions[$inventoryItem->id] = [
+                    'inventory_id' => $inventoryItem->id,
+                    'amount' => 0.0,
+                ];
+            }
+
+            $deductions[$inventoryItem->id]['amount'] += $requiredInInventoryUnit;
+        }
+
+        return [
+            'canCook' => count($missing) === 0,
+            'missingIngredients' => $missing,
+            'deductions' => array_values($deductions),
+        ];
+    }
+
+    private function buildInventoryLookups(Collection $inventoryItems): array
+    {
+        $byIngredientId = [];
+        $byName = [];
+
+        foreach ($inventoryItems as $item) {
+            /** @var Inventory $item */
+            $ingredientId = $item->ingredient_id;
+            if ($ingredientId !== null) {
+                $byIngredientId[$ingredientId] = $item;
+            }
+
+            $name = strtolower(trim((string) ($item->ingredient?->name ?? '')));
+            if ($name !== '' && !isset($byName[$name])) {
+                $byName[$name] = $item;
+            }
+        }
+
+        return [$byIngredientId, $byName];
+    }
+
+    private function getRecipeIngredientName(RecipeIngredient $ingredient): string
+    {
+        if ($this->hasColumn('recipe_ingredients', 'item_name')) {
+            return trim((string) $ingredient->item_name);
+        }
+
+        return trim((string) ($ingredient->ingredient?->name ?? ''));
+    }
+
+    private function getRecipeIngredientAmount(RecipeIngredient $ingredient): float
+    {
+        if ($this->hasColumn('recipe_ingredients', 'amount')) {
+            return max(0, (float) $ingredient->amount);
+        }
+
+        return max(0, (float) $ingredient->required_quantity);
+    }
+
+    private function getRecipeIngredientUnit(RecipeIngredient $ingredient): string
+    {
+        if ($this->hasColumn('recipe_ingredients', 'unit')) {
+            $value = trim((string) $ingredient->unit);
+            return $value !== '' ? $value : 'piece';
+        }
+
+        $fallback = trim((string) ($ingredient->ingredient?->base_unit ?? 'piece'));
+        return $fallback !== '' ? $fallback : 'piece';
+    }
+
+    private function convertAmountToBase(float $amount, string $unit, string $baseUnit): ?float
+    {
+        $normalizedBase = strtolower(trim($baseUnit));
+        $normalizedUnit = strtolower(trim($unit));
+
+        if ($normalizedUnit === '' || $normalizedUnit === $normalizedBase) {
+            return $amount;
+        }
+
+        $cleanUnit = str_replace([' ', '.'], '', $normalizedUnit);
+
+        $gramsMap = [
+            'g' => 1,
+            'gram' => 1,
+            'grams' => 1,
+            'kg' => 1000,
+            'kilogram' => 1000,
+            'kilograms' => 1000,
+            'mg' => 0.001,
+        ];
+
+        $millilitersMap = [
+            'ml' => 1,
+            'milliliter' => 1,
+            'milliliters' => 1,
+            'l' => 1000,
+            'liter' => 1000,
+            'liters' => 1000,
+            'litre' => 1000,
+            'litres' => 1000,
+            'cup' => 240,
+            'cups' => 240,
+            'tbsp' => 15,
+            'tablespoon' => 15,
+            'tablespoons' => 15,
+            'tsp' => 5,
+            'teaspoon' => 5,
+            'teaspoons' => 5,
+        ];
+
+        $pieceMap = [
+            'piece' => 1,
+            'pieces' => 1,
+            'pc' => 1,
+            'pcs' => 1,
+            'unit' => 1,
+            'units' => 1,
+        ];
+
+        if ($normalizedBase === 'g') {
+            return isset($gramsMap[$cleanUnit]) ? $amount * $gramsMap[$cleanUnit] : null;
+        }
+
+        if ($normalizedBase === 'ml') {
+            return isset($millilitersMap[$cleanUnit]) ? $amount * $millilitersMap[$cleanUnit] : null;
+        }
+
+        if ($normalizedBase === 'piece') {
+            return isset($pieceMap[$cleanUnit]) ? $amount * $pieceMap[$cleanUnit] : null;
+        }
+
+        return null;
     }
 
     private function hasColumn(string $table, string $column): bool
@@ -317,21 +660,90 @@ class RecipeController extends Controller
     private function normalizeBaseUnit(string $unit): string
     {
         $normalized = strtolower(trim($unit));
+        $clean = str_replace([' ', '.'], '', $normalized);
 
-        if (str_contains($normalized, 'g') || str_contains($normalized, 'gram') || str_contains($normalized, 'kg')) {
+        if (in_array($clean, ['g', 'gram', 'grams', 'kg', 'kilogram', 'kilograms', 'mg'], true)) {
             return 'g';
         }
 
-        if (
-            str_contains($normalized, 'ml') ||
-            str_contains($normalized, 'liter') ||
-            str_contains($normalized, 'cup') ||
-            str_contains($normalized, 'tbsp') ||
-            str_contains($normalized, 'tsp')
-        ) {
+        if (in_array($clean, ['ml', 'milliliter', 'milliliters', 'l', 'liter', 'liters', 'litre', 'litres', 'cup', 'cups', 'tbsp', 'tablespoon', 'tablespoons', 'tsp', 'teaspoon', 'teaspoons'], true)) {
             return 'ml';
         }
 
         return 'piece';
+    }
+
+    private function normalizeToDatabaseMeasurement(float $amount, string $unit): ?array
+    {
+        if ($amount <= 0) {
+            return null;
+        }
+
+        $clean = str_replace([' ', '.'], '', strtolower(trim($unit)));
+
+        $gramsMap = [
+            'g' => 1,
+            'gram' => 1,
+            'grams' => 1,
+            'kg' => 1000,
+            'kilogram' => 1000,
+            'kilograms' => 1000,
+            'mg' => 0.001,
+        ];
+
+        $millilitersMap = [
+            'ml' => 1,
+            'milliliter' => 1,
+            'milliliters' => 1,
+            'l' => 1000,
+            'liter' => 1000,
+            'liters' => 1000,
+            'litre' => 1000,
+            'litres' => 1000,
+            'cup' => 240,
+            'cups' => 240,
+            'tbsp' => 15,
+            'tablespoon' => 15,
+            'tablespoons' => 15,
+            'tsp' => 5,
+            'teaspoon' => 5,
+            'teaspoons' => 5,
+        ];
+
+        $pieceMap = [
+            'piece' => 1,
+            'pieces' => 1,
+            'pc' => 1,
+            'pcs' => 1,
+            'unit' => 1,
+            'units' => 1,
+            'clove' => 1,
+            'cloves' => 1,
+            'slice' => 1,
+            'slices' => 1,
+        ];
+
+        if (isset($gramsMap[$clean])) {
+            return [
+                'amount' => round($amount * $gramsMap[$clean], 2),
+                'unit' => 'g',
+            ];
+        }
+
+        if (isset($millilitersMap[$clean])) {
+            return [
+                'amount' => round($amount * $millilitersMap[$clean], 2),
+                'unit' => 'ml',
+            ];
+        }
+
+        if (isset($pieceMap[$clean])) {
+            return [
+                'amount' => round($amount * $pieceMap[$clean], 2),
+                'unit' => 'piece',
+            ];
+        }
+
+        return null;
     }
 }

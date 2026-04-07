@@ -42,7 +42,7 @@ class ApiClient {
     }
   }
 
-  async addInventoryItems(items: Array<{ ingredient_id: number; quantity: number; expiry_date?: string }>) {
+  async addInventoryItems(items: Array<{ ingredient_id: number; quantity: number; expiry_date?: string | null }>) {
     try {
       const response = await this.client.post('/api/inventory/bulk', { items });
       return response.data;
@@ -95,6 +95,18 @@ class ApiClient {
   async saveGeneratedRecipes(recipes: RecipePayload[]) {
     try {
       const response = await this.client.post('/api/recipes/generated', { recipes });
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+      throw error;
+    }
+  }
+
+  async cookRecipe(recipeId: number, peopleCount: number) {
+    try {
+      const response = await this.client.post(`/api/recipes/${recipeId}/cook`, {
+        people_count: peopleCount,
+      });
       return response.data;
     } catch (error) {
       this.handleError(error);

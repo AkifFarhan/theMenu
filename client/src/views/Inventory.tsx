@@ -101,7 +101,7 @@ export default function Inventory() {
 
   const handleSaveAllChanges = async () => {
     // Validate all changes
-    for (const [id, data] of editData.entries()) {
+    for (const [, data] of editData.entries()) {
       if (!data.quantity || isNaN(parseFloat(data.quantity)) || parseFloat(data.quantity) <= 0) {
         toast.error('Please enter valid quantities for all items');
         return;
