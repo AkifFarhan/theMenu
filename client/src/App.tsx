@@ -11,6 +11,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import './index.css';
 import { Toaster } from 'react-hot-toast';
 import Sessions from './views/Sessions';
+import PageErrorBoundary from './components/PageErrorBoundary';
 
 function App() {
   return (
@@ -31,7 +32,14 @@ function App() {
           <Route path={'/'} element={<Home />} />
           <Route path={'/inventory'} element={<Inventory />} />
           <Route path={'/add-food'} element={<AddFood />} />
-          <Route path={'/recipes'} element={<Recipes />} />
+          <Route
+            path={'/recipes'}
+            element={
+              <PageErrorBoundary>
+                <Recipes />
+              </PageErrorBoundary>
+            }
+          />
           <Route path={'/sessions'} element={<Sessions />} />
           <Route path={'/profile'} element={<Profile />} />
         </Route>

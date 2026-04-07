@@ -1,13 +1,157 @@
 import { useEffect, useState } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
+import toast from 'react-hot-toast';
 import { getRecipesFromInventory, type GeneratedRecipe } from '../services/geminiService';
 import ApiClient from '../api';
 
 interface Item {
   id: number;
   name: string;
-  quantity: string;
-  category?: string;
+  quantity: number;
+  unit: string;
+  ingredient_id: number;
+}
+
+interface MissingIngredient {
+  item: string;
+  required: number;
+  unit: string;
+  available: number;
+  availableUnit: string;
+}
+
+interface RecipeCookability {
+  canCook: boolean;
+  missingIngredients: MissingIngredient[];
+}
+
+type RecipeTypeKey = keyof typeof cardMeta;
+
+const STAPLES = new Set(['salt', 'water', 'oil']);
+
+function formatAmount(amount: number): string {
+  return Number.isInteger(amount) ? amount.toString() : amount.toFixed(2).replace(/\.00$/, '');
+}
+
+function toBaseAmount(amount: number, unit: string, baseUnit: string): number | null {
+  const normalizedUnit = unit.trim().toLowerCase().replace(/[\s.]/g, '');
+  const normalizedBase = baseUnit.trim().toLowerCase();
+
+  if (!normalizedUnit || normalizedUnit === normalizedBase) {
+    return amount;
+  }
+
+  const gramsMap: Record<string, number> = {
+    g: 1,
+    gram: 1,
+    grams: 1,
+    kg: 1000,
+    kilogram: 1000,
+    kilograms: 1000,
+    mg: 0.001,
+  };
+
+  const millilitersMap: Record<string, number> = {
+    ml: 1,
+    milliliter: 1,
+    milliliters: 1,
+    l: 1000,
+    liter: 1000,
+    liters: 1000,
+    litre: 1000,
+    litres: 1000,
+    cup: 240,
+    cups: 240,
+    tbsp: 15,
+    tablespoon: 15,
+    tablespoons: 15,
+    tsp: 5,
+    teaspoon: 5,
+    teaspoons: 5,
+  };
+
+  const pieceMap: Record<string, number> = {
+    piece: 1,
+    pieces: 1,
+    pc: 1,
+    pcs: 1,
+    unit: 1,
+    units: 1,
+  };
+
+  if (normalizedBase === 'g') {
+    return gramsMap[normalizedUnit] ? amount * gramsMap[normalizedUnit] : null;
+  }
+
+  if (normalizedBase === 'ml') {
+    return millilitersMap[normalizedUnit] ? amount * millilitersMap[normalizedUnit] : null;
+  }
+
+  if (normalizedBase === 'piece') {
+    return pieceMap[normalizedUnit] ? amount * pieceMap[normalizedUnit] : null;
+  }
+
+  return null;
+}
+
+function getRecipeCookability(recipe: GeneratedRecipe, inventoryItems: Item[], peopleCount: number): RecipeCookability {
+  const inventoryByIngredientId = new Map<number, Item>();
+  const inventoryByName = new Map<string, Item>();
+
+  for (const item of inventoryItems) {
+    const ingredientId = Number(item?.ingredient_id);
+    if (Number.isFinite(ingredientId) && ingredientId > 0) {
+      inventoryByIngredientId.set(ingredientId, item);
+    }
+
+    const normalizedName = String(item?.name ?? '').trim().toLowerCase();
+    if (!inventoryByName.has(normalizedName)) {
+      inventoryByName.set(normalizedName, item);
+    }
+  }
+
+  const missingIngredients: MissingIngredient[] = [];
+
+  for (const ingredient of recipe.ingredients ?? []) {
+    const normalizedName = String(ingredient?.item ?? '').trim().toLowerCase();
+    if (!normalizedName || STAPLES.has(normalizedName)) {
+      continue;
+    }
+
+    const requiredAmount = Number(ingredient?.amount ?? 0) * peopleCount;
+    const inventoryItem =
+      (typeof ingredient.ingredientId === 'number' && ingredient.ingredientId > 0
+        ? inventoryByIngredientId.get(ingredient.ingredientId)
+        : undefined) || inventoryByName.get(normalizedName);
+
+    if (!inventoryItem) {
+      missingIngredients.push({
+        item: String(ingredient?.item ?? 'Unknown item'),
+        required: requiredAmount,
+        unit: String(ingredient?.unit ?? 'piece'),
+        available: 0,
+        availableUnit: String(ingredient?.unit ?? 'piece'),
+      });
+      continue;
+    }
+
+    const requiredInInventoryUnit = toBaseAmount(requiredAmount, String(ingredient?.unit ?? 'piece'), inventoryItem.unit);
+    const availableQuantity = Number(inventoryItem?.quantity ?? 0);
+    if (!Number.isFinite(availableQuantity) || requiredInInventoryUnit === null || availableQuantity + 0.0001 < requiredInInventoryUnit) {
+      missingIngredients.push({
+        item: String(ingredient?.item ?? 'Unknown item'),
+        required: requiredInInventoryUnit ?? requiredAmount,
+        unit: requiredInInventoryUnit === null ? String(ingredient?.unit ?? 'piece') : inventoryItem.unit,
+        available: Number.isFinite(availableQuantity) ? availableQuantity : 0,
+        availableUnit: String(inventoryItem?.unit ?? 'piece'),
+      });
+    }
+  }
+
+  return {
+    canCook: missingIngredients.length === 0,
+    missingIngredients,
+  };
 }
 
 function localFallbackRecipes(items: string[]): GeneratedRecipe[] {
@@ -74,18 +218,67 @@ const cardMeta = {
   surprise: { tag: 'Surprise' },
 } as const;
 
+function normalizeRecipeType(type: unknown): RecipeTypeKey {
+  return type === 'quick' || type === 'healthy' || type === 'surprise' ? type : 'quick';
+}
+
+function normalizeRecipesForDisplay(recipes: unknown[]): GeneratedRecipe[] {
+  return recipes
+    .map((recipe) => {
+      const raw = recipe as Partial<GeneratedRecipe> & { ingredients?: unknown; steps?: unknown };
+      const ingredients = Array.isArray(raw.ingredients)
+        ? raw.ingredients
+            .map((entry) => {
+              const item = entry as Partial<GeneratedRecipe['ingredients'][number]>;
+              const amount = Number(item?.amount ?? 0);
+              if (!Number.isFinite(amount) || amount <= 0) {
+                return null;
+              }
+
+              return {
+                ingredientId: typeof item?.ingredientId === 'number' ? item.ingredientId : null,
+                item: String(item?.item ?? 'Unknown item'),
+                amount,
+                unit: String(item?.unit ?? 'piece'),
+              };
+            })
+            .filter((item): item is NonNullable<typeof item> => item !== null)
+        : [];
+
+      const steps = Array.isArray(raw.steps)
+        ? raw.steps.map((step) => String(step)).filter((step) => step.trim().length > 0)
+        : [];
+
+      return {
+        id: typeof raw.id === 'number' ? raw.id : undefined,
+        type: normalizeRecipeType(raw.type),
+        title: String(raw.title ?? 'Untitled recipe'),
+        preparationTime: String(raw.preparationTime ?? '20 mins'),
+        baseServings: 1,
+        ingredients,
+        steps,
+      } satisfies GeneratedRecipe;
+    })
+    .filter((recipe) => recipe.ingredients.length > 0 && recipe.steps.length > 0);
+}
+
 export default function Recipes() {
   const [recipes, setRecipes] = useState<GeneratedRecipe[] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [inventoryNames, setInventoryNames] = useState<string[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<Item[]>([]);
   const [peopleCount, setPeopleCount] = useState(1);
+  const [cookingRecipeKey, setCookingRecipeKey] = useState<string | null>(null);
 
   useEffect(() => {
     const loadInventory = async () => {
       try {
         const response = await api.getInventory();
+        const items = Array.isArray(response.items) ? (response.items as Item[]) : [];
+        setInventoryItems(items);
         const names = Array.isArray(response.items)
           ? response.items
               .map((item: Item) => item.name?.trim())
@@ -97,7 +290,7 @@ export default function Recipes() {
           try {
             const savedRecipesResponse = await api.getMatchingRecipes();
             const savedRecipes = Array.isArray(savedRecipesResponse?.recipes)
-              ? (savedRecipesResponse.recipes as GeneratedRecipe[])
+              ? normalizeRecipesForDisplay(savedRecipesResponse.recipes)
               : [];
 
             if (savedRecipes.length > 0) {
@@ -108,6 +301,7 @@ export default function Recipes() {
           }
         }
       } catch {
+        setInventoryItems([]);
         setInventoryNames([]);
       }
     };
@@ -131,20 +325,24 @@ export default function Recipes() {
 
   const handleGenerate = async () => {
     setError(null);
+    setSuccessMessage(null);
     setCooldownSeconds(5);
     setIsLoading(true);
 
     try {
-      const generated = await getRecipesFromInventory(inventoryNames);
+      const generated = await getRecipesFromInventory(
+        inventoryNames,
+        inventoryItems.map((item) => ({ name: item.name, unit: item.unit }))
+      );
 
       try {
         const savedResponse = await api.saveGeneratedRecipes(generated.recipes);
         const savedRecipes = Array.isArray(savedResponse?.recipes)
-          ? (savedResponse.recipes as GeneratedRecipe[])
-          : generated.recipes;
+          ? normalizeRecipesForDisplay(savedResponse.recipes)
+          : normalizeRecipesForDisplay(generated.recipes);
         setRecipes(savedRecipes);
       } catch (saveErr: unknown) {
-        setRecipes(generated.recipes);
+        setRecipes(normalizeRecipesForDisplay(generated.recipes));
 
         const typedSaveError = saveErr as {
           response?: { data?: { message?: string; error?: string } };
@@ -163,8 +361,15 @@ export default function Recipes() {
       const message = err instanceof Error ? err.message : 'Failed to generate recipes right now.';
       if (message.includes('429')) {
         const fallbackRecipes = localFallbackRecipes(inventoryNames);
-        setRecipes(fallbackRecipes);
+        setRecipes(normalizeRecipesForDisplay(fallbackRecipes));
         setError('Gemini is rate-limited right now. Showing local fallback recipes.');
+      } else if (
+        message.toLowerCase().includes('unexpected format') ||
+        message.toLowerCase().includes('json')
+      ) {
+        const fallbackRecipes = localFallbackRecipes(inventoryNames);
+        setRecipes(normalizeRecipesForDisplay(fallbackRecipes));
+        setError('Gemini returned an unexpected format. Showing local fallback recipes for now.');
       } else if (
         message.includes('403') ||
         message.toLowerCase().includes('api key') ||
@@ -173,13 +378,48 @@ export default function Recipes() {
         message.toLowerCase().includes('missing vite_gemini_api_key')
       ) {
         const fallbackRecipes = localFallbackRecipes(inventoryNames);
-        setRecipes(fallbackRecipes);
+        setRecipes(normalizeRecipesForDisplay(fallbackRecipes));
         setError(`${message} Showing local fallback recipes for now.`);
       } else {
         setError(message);
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleCook = async (recipe: GeneratedRecipe, recipeKey: string) => {
+    if (!recipe.id) {
+      const message = 'This recipe is not saved yet, so it cannot be cooked with auto deduction.';
+      setError(message);
+      toast.error(message);
+      return;
+    }
+
+    setError(null);
+    setSuccessMessage(null);
+    setCookingRecipeKey(recipeKey);
+
+    try {
+      await api.cookRecipe(recipe.id, peopleCount);
+      const message = `Cooked ${recipe.title}. Inventory has been auto-deducted.`;
+      setSuccessMessage(message);
+      toast.success(message);
+
+      const inventoryResponse = await api.getInventory();
+      const items = Array.isArray(inventoryResponse.items) ? (inventoryResponse.items as Item[]) : [];
+      setInventoryItems(items);
+      setInventoryNames(items.map((item) => item.name).filter(Boolean));
+
+      const matchingResponse = await api.getMatchingRecipes();
+      const matchingRecipes = Array.isArray(matchingResponse?.recipes)
+        ? normalizeRecipesForDisplay(matchingResponse.recipes)
+        : [];
+      setRecipes(matchingRecipes);
+    } catch {
+      // ApiClient surfaces the backend error as toast.
+    } finally {
+      setCookingRecipeKey(null);
     }
   };
 
@@ -230,11 +470,21 @@ export default function Recipes() {
         </Alert>
       )}
 
+      {successMessage && (
+        <Alert variant="success" className="mt-3 mb-0">
+          {successMessage}
+        </Alert>
+      )}
+
       {recipes && recipes.length > 0 && (
         <Row className="mt-3 g-3">
           {recipes.map((recipe, recipeIndex) => {
-            const meta = cardMeta[recipe.type];
+            const recipeType = normalizeRecipeType(recipe.type);
+            const meta = cardMeta[recipeType];
             const recipeKey = `${recipe.type}-${recipe.title}-${recipeIndex}`;
+            const cookability = getRecipeCookability(recipe, inventoryItems, peopleCount);
+            const isCooking = cookingRecipeKey === recipeKey;
+            const canCookNow = cookability.canCook && Boolean(recipe.id) && !isLoading && !isCooking;
 
             return (
               <Col key={recipeKey} xs={12} md={4}>
@@ -255,24 +505,39 @@ export default function Recipes() {
                       <strong>Needed for {peopleCount} {peopleCount === 1 ? 'person' : 'people'}:</strong>
                     </div>
                     <ul className="mt-1 mb-0">
-                      {recipe.ingredients.map((ingredient, index) => {
+                      {(recipe.ingredients ?? []).map((ingredient, index) => {
                         const scaledAmount = ingredient.amount * peopleCount;
-                        const readableAmount = Number.isInteger(scaledAmount)
-                          ? scaledAmount.toString()
-                          : scaledAmount.toFixed(2).replace(/\.00$/, '');
+                        const readableAmount = formatAmount(scaledAmount);
 
                         return (
-                          <li key={`${recipe.type}-ingredient-${index}`}>
+                          <li key={`${recipeType}-ingredient-${index}`}>
                             {ingredient.item}: {readableAmount} {ingredient.unit}
                           </li>
                         );
                       })}
                     </ul>
                     <ol className="mt-2 mb-0 recipe-steps">
-                      {recipe.steps.map((step, index) => (
-                        <li key={`${recipe.type}-${index}`}>{step}</li>
+                      {(recipe.steps ?? []).map((step, index) => (
+                        <li key={`${recipeType}-${index}`}>{step}</li>
                       ))}
                     </ol>
+                    {!canCookNow && cookability.missingIngredients.length > 0 && (
+                      <div className="mt-3 small text-danger">
+                        Missing: {cookability.missingIngredients[0].item} ({formatAmount(cookability.missingIngredients[0].available)} {cookability.missingIngredients[0].availableUnit} available)
+                      </div>
+                    )}
+                    {!recipe.id && (
+                      <div className="mt-3 small text-muted">
+                        Save this recipe first before cooking with auto deduction.
+                      </div>
+                    )}
+                    <Button
+                      className="btn-navy mt-3"
+                      disabled={!canCookNow || cookingRecipeKey !== null}
+                      onClick={() => handleCook(recipe, recipeKey)}
+                    >
+                      {isCooking ? 'Cooking...' : 'Cook & Auto Deduct'}
+                    </Button>
                   </Card.Body>
                 </Card>
               </Col>

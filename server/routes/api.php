@@ -44,4 +44,5 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Recipes
     Route::get('/recipes/matching', [RecipeController::class, 'getMatchingRecipes']);
     Route::post('/recipes/generated', [RecipeController::class, 'saveGeneratedRecipes']);
+    Route::post('/recipes/{id}/cook', [RecipeController::class, 'cookRecipe']);
 });
