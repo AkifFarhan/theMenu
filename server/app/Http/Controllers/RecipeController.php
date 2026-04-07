@@ -27,7 +27,10 @@ class RecipeController extends Controller
             $user = Auth::user();
             $this->ensureRecipeSchema();
 
-            $inventoryItems = Inventory::where('user_id', $user->id)
+            $inventoryItems = Inventory::query()
+                ->join('ingredients', 'ingredients.id', '=', 'inventories.ingredient_id')
+                ->where('inventories.user_id', $user->id)
+                ->select('inventories.*')
                 ->with('ingredient:id,name,base_unit')
                 ->get();
 
@@ -35,9 +38,12 @@ class RecipeController extends Controller
                 return response()->json(['recipes' => []], 200);
             }
 
-            $recipes = Recipe::where('is_ai_generated', 1)
+            $recipes = Recipe::query()
+                ->leftJoin('users as recipe_creators', 'recipe_creators.id', '=', 'recipes.created_by')
+                ->where('recipes.is_ai_generated', 1)
+                ->select('recipes.*')
                 ->with(['recipeIngredients.ingredient', 'instructions'])
-                ->orderByDesc('id')
+                ->orderByDesc('recipes.id')
                 ->get();
 
             $matching = $recipes
@@ -92,7 +98,11 @@ class RecipeController extends Controller
             $peopleCount = (int) $request->input('people_count', 1);
 
             $result = DB::transaction(function () use ($id, $user, $peopleCount) {
-                $recipe = Recipe::with(['recipeIngredients.ingredient', 'instructions'])->find($id);
+                $recipe = Recipe::query()
+                    ->leftJoin('users as recipe_creators', 'recipe_creators.id', '=', 'recipes.created_by')
+                    ->select('recipes.*')
+                    ->with(['recipeIngredients.ingredient', 'instructions'])
+                    ->find($id);
 
                 if (!$recipe) {
                     return [
@@ -103,7 +113,10 @@ class RecipeController extends Controller
                     ];
                 }
 
-                $inventoryItems = Inventory::where('user_id', $user->id)
+                $inventoryItems = Inventory::query()
+                    ->join('ingredients', 'ingredients.id', '=', 'inventories.ingredient_id')
+                    ->where('inventories.user_id', $user->id)
+                    ->select('inventories.*')
                     ->with('ingredient:id,name,base_unit')
                     ->lockForUpdate()
                     ->get();
@@ -334,7 +347,15 @@ class RecipeController extends Controller
                         ]);
                     }
 
-                    $recipe->load(['recipeIngredients.ingredient', 'instructions']);
+                    $recipe = Recipe::query()
+                        ->leftJoin('users as recipe_creators', 'recipe_creators.id', '=', 'recipes.created_by')
+                        ->select('recipes.*')
+                        ->with(['recipeIngredients.ingredient', 'instructions'])
+                        ->find($recipe->id);
+
+                    if (!$recipe) {
+                        throw new \RuntimeException('Recipe not found after save operation.');
+                    }
                     $saved[] = $this->formatRecipe($recipe);
                 }
             });
