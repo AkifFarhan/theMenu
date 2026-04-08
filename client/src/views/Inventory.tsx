@@ -20,6 +20,28 @@ interface EditingItem {
 
 const api = new ApiClient();
 
+// Helper function to format date for display (YYYY-MM-DD)
+const formatDateForDisplay = (dateString?: string): string => {
+  if (!dateString) return '-';
+  try {
+    const date = new Date(dateString);
+    return date.toISOString().split('T')[0];
+  } catch {
+    return dateString;
+  }
+};
+
+// Helper function to format date for input field
+const formatDateForInput = (dateString?: string): string => {
+  if (!dateString) return '';
+  try {
+    const date = new Date(dateString);
+    return date.toISOString().split('T')[0];
+  } catch {
+    return dateString;
+  }
+};
+
 export default function Inventory() {
   const [items, setItems] = useState<Item[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -77,7 +99,7 @@ export default function Inventory() {
     const newEditData = new Map(editData);
     newEditData.set(item.id, {
       quantity: item.quantity.toString(),
-      expiry_date: item.expiry_date || ''
+      expiry_date: formatDateForInput(item.expiry_date)
     });
     setEditData(newEditData);
   };
@@ -237,7 +259,7 @@ export default function Inventory() {
                   <td>
                     {it.quantity} {it.unit}
                   </td>
-                  <td>{it.expiry_date || '-'}</td>
+                  <td>{formatDateForDisplay(it.expiry_date)}</td>
                   <td>
                     {isExpired(it.expiry_date) ? (
                       <Badge bg="danger">Expired</Badge>
