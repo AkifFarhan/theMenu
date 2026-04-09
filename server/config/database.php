@@ -78,15 +78,6 @@ return [
             'sslmode' => 'prefer',
         ],
 
-        'sqlsrv' => [
-            'driver' => 'sqlsrv',
-            'host' => env('DB_HOST', 'localhost'),
-            'port' => env('DB_PORT', '1433'),
-            'database' => env('DB_DATABASE', 'themenu'),
-            'username' => env('DB_USERNAME'),
-            'password' => env('DB_PASSWORD'),
-        ],
-
     ],
 
     /*
