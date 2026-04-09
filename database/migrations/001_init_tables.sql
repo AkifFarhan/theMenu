@@ -83,7 +83,6 @@ CREATE TABLE recipes (
     preparation_time VARCHAR(50) NOT NULL,
     base_servings INT NOT NULL DEFAULT 1,
     description TEXT NULL,
-    is_ai_generated TINYINT(1) DEFAULT 1,
     created_by BIGINT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

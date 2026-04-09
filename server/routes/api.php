@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\GeminiController;
 use App\Http\Controllers\RecipeController;
 
 /*
@@ -42,6 +43,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::put('/inventory/{id}', [\App\Http\Controllers\InventoryController::class, 'updateInventoryItem']);
 
     // Recipes
+    Route::post('/recipes/generate', [GeminiController::class, 'generate']);
     Route::get('/recipes/matching', [RecipeController::class, 'getMatchingRecipes']);
     Route::post('/recipes/generated', [RecipeController::class, 'saveGeneratedRecipes']);
     Route::post('/recipes/{id}/cook', [RecipeController::class, 'cookRecipe']);

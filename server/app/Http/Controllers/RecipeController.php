@@ -42,7 +42,6 @@ class RecipeController extends Controller
 
             $recipes = Recipe::query()
                 ->leftJoin('users as recipe_creators', 'recipe_creators.id', '=', 'recipes.created_by')
-                ->where('recipes.is_ai_generated', 1)
                 ->select('recipes.*')
                 ->with(['recipeIngredients.ingredient', 'instructions'])
                 ->orderByDesc('recipes.id')
@@ -270,7 +269,6 @@ class RecipeController extends Controller
                     $recipeData = [
                         'title' => $payloadRecipe['title'],
                         'description' => $recipeDescription,
-                        'is_ai_generated' => 1,
                         'created_by' => $user->id,
                     ];
 

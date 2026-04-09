@@ -133,11 +133,10 @@ FROM inventories i
 INNER JOIN ingredients ing ON ing.id = i.ingredient_id
 WHERE i.user_id = :user_id;
 
--- Fetch AI-generated recipes
+-- Fetch recipes
 SELECT r.*
 FROM recipes r
 LEFT JOIN users recipe_creators ON recipe_creators.id = r.created_by
-WHERE r.is_ai_generated = 1
 ORDER BY r.id DESC;
 
 -- Eager load recipe ingredients for returned recipes
@@ -154,14 +153,14 @@ ORDER BY recipe_id, step_number ASC;
 
 
 /* ======================================================
-	 RECIPES: SAVE GENERATED (RecipeController)
+	 RECIPES: SAVE (RecipeController)
 	 ====================================================== */
 
--- Insert generated recipe
+-- Insert recipe
 INSERT INTO recipes
-	(recipe_type, title, description, preparation_time, base_servings, is_ai_generated, created_by, created_at, updated_at)
+	(recipe_type, title, description, preparation_time, base_servings, created_by, created_at, updated_at)
 VALUES
-	(:recipe_type, :title, :description, :preparation_time, 1, 1, :created_by, NOW(), NOW());
+	(:recipe_type, :title, :description, :preparation_time, 1, :created_by, NOW(), NOW());
 
 -- Find ingredient by case-insensitive name
 SELECT id, name, base_unit
