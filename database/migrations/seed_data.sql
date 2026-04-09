@@ -1,8 +1,8 @@
 -- ==========================================
--- SEED DATA FOR SMART RECIPE SYSTEM (SQL Server)
+-- SEED DATA FOR SMART RECIPE SYSTEM (MySQL)
 -- ==========================================
 
-USE [themenu];
+USE themenu;
 
 -- ==========================================
 -- USERS (passwords are hashed versions of 'password123' for demonstration)
@@ -104,80 +104,80 @@ INSERT INTO inventories (user_id, ingredient_id, quantity, expiry_date) VALUES
 -- ==========================================
 -- RECIPES
 -- ==========================================
-INSERT INTO recipes (title, description, is_ai_generated, created_by) VALUES
-('Classic Spaghetti Carbonara', 'Creamy Italian pasta with eggs and cheese', 0, 1),
-('Garlic Butter Chicken', 'Pan-seared chicken with garlic butter sauce', 0, 1),
-('Fried Rice', 'Asian-style fried rice with vegetables and eggs', 0, 2),
-('Tomato Basil Soup', 'Simple and comforting tomato soup', 1, NULL),
-('Grilled Salmon with Veggies', 'Healthy grilled salmon with roasted vegetables', 0, 3),
-('Beef Tacos', 'Mexican-style ground beef tacos', 1, NULL),
-('Veggie Stir Fry', 'Quick vegetable stir fry with tofu', 0, 4);
+INSERT INTO recipes (recipe_type, title, preparation_time, base_servings, description, is_ai_generated, created_by) VALUES
+('quick', 'Classic Spaghetti Carbonara', '25 mins', 1, 'Creamy Italian pasta with eggs and cheese', 0, 1),
+('quick', 'Garlic Butter Chicken', '30 mins', 1, 'Pan-seared chicken with garlic butter sauce', 0, 1),
+('quick', 'Fried Rice', '20 mins', 1, 'Asian-style fried rice with vegetables and eggs', 0, 2),
+('healthy', 'Tomato Basil Soup', '35 mins', 1, 'Simple and comforting tomato soup', 1, NULL),
+('healthy', 'Grilled Salmon with Veggies', '35 mins', 1, 'Healthy grilled salmon with roasted vegetables', 0, 3),
+('surprise', 'Beef Tacos', '30 mins', 1, 'Mexican-style ground beef tacos', 1, NULL),
+('quick', 'Veggie Stir Fry', '20 mins', 1, 'Quick vegetable stir fry with tofu', 0, 4);
 
 -- ==========================================
 -- RECIPE INGREDIENTS
 -- ==========================================
 -- Recipe 1: Spaghetti Carbonara
-INSERT INTO recipe_ingredients (recipe_id, ingredient_id, required_quantity) VALUES
-(1, 15, 400),   -- Pasta
-(1, 4, 4),      -- Eggs
-(1, 20, 100),   -- Cheese
-(1, 8, 10),     -- Garlic
-(1, 24, 5),     -- Black Pepper
-(1, 23, 5);     -- Salt
+INSERT INTO recipe_ingredients (recipe_id, ingredient_id, item_name, amount, unit, required_quantity) VALUES
+(1, 15, 'Pasta', 400, 'g', 400),
+(1, 4, 'Eggs', 4, 'piece', 4),
+(1, 20, 'Cheese', 100, 'g', 100),
+(1, 8, 'Garlic', 10, 'g', 10),
+(1, 24, 'Black Pepper', 5, 'g', 5),
+(1, 23, 'Salt', 5, 'g', 5);
 
 -- Recipe 2: Garlic Butter Chicken
-INSERT INTO recipe_ingredients (recipe_id, ingredient_id, required_quantity) VALUES
-(2, 1, 500),    -- Chicken Breast
-(2, 19, 50),    -- Butter
-(2, 8, 20),     -- Garlic
-(2, 23, 5),     -- Salt
-(2, 24, 3),     -- Black Pepper
-(2, 22, 20);    -- Olive Oil
+INSERT INTO recipe_ingredients (recipe_id, ingredient_id, item_name, amount, unit, required_quantity) VALUES
+(2, 1, 'Chicken Breast', 500, 'g', 500),
+(2, 19, 'Butter', 50, 'g', 50),
+(2, 8, 'Garlic', 20, 'g', 20),
+(2, 23, 'Salt', 5, 'g', 5),
+(2, 24, 'Black Pepper', 3, 'g', 3),
+(2, 22, 'Olive Oil', 20, 'ml', 20);
 
 -- Recipe 3: Fried Rice
-INSERT INTO recipe_ingredients (recipe_id, ingredient_id, required_quantity) VALUES
-(3, 14, 300),   -- Rice
-(3, 4, 2),      -- Eggs
-(3, 7, 50),     -- Onion
-(3, 8, 10),     -- Garlic
-(3, 9, 50),     -- Carrot
-(3, 26, 30),    -- Soy Sauce
-(3, 22, 30);    -- Olive Oil
+INSERT INTO recipe_ingredients (recipe_id, ingredient_id, item_name, amount, unit, required_quantity) VALUES
+(3, 14, 'Rice', 300, 'g', 300),
+(3, 4, 'Eggs', 2, 'piece', 2),
+(3, 7, 'Onion', 50, 'g', 50),
+(3, 8, 'Garlic', 10, 'g', 10),
+(3, 9, 'Carrot', 50, 'g', 50),
+(3, 26, 'Soy Sauce', 30, 'ml', 30),
+(3, 22, 'Olive Oil', 30, 'ml', 30);
 
 -- Recipe 4: Tomato Basil Soup
-INSERT INTO recipe_ingredients (recipe_id, ingredient_id, required_quantity) VALUES
-(4, 6, 800),    -- Tomato
-(4, 7, 100),    -- Onion
-(4, 8, 15),     -- Garlic
-(4, 29, 10),    -- Basil
-(4, 22, 40),    -- Olive Oil
-(4, 23, 8),     -- Salt
-(4, 24, 3);     -- Black Pepper
+INSERT INTO recipe_ingredients (recipe_id, ingredient_id, item_name, amount, unit, required_quantity) VALUES
+(4, 6, 'Tomato', 800, 'g', 800),
+(4, 7, 'Onion', 100, 'g', 100),
+(4, 8, 'Garlic', 15, 'g', 15),
+(4, 29, 'Basil', 10, 'g', 10),
+(4, 22, 'Olive Oil', 40, 'ml', 40),
+(4, 23, 'Salt', 8, 'g', 8),
+(4, 24, 'Black Pepper', 3, 'g', 3);
 
 -- Recipe 5: Grilled Salmon with Veggies
-INSERT INTO recipe_ingredients (recipe_id, ingredient_id, required_quantity) VALUES
-(5, 3, 400),    -- Salmon
-(5, 12, 200),   -- Broccoli
-(5, 9, 150),    -- Carrot
-(5, 22, 30),    -- Olive Oil
-(5, 23, 5),     -- Salt
-(5, 24, 3);     -- Black Pepper
+INSERT INTO recipe_ingredients (recipe_id, ingredient_id, item_name, amount, unit, required_quantity) VALUES
+(5, 3, 'Salmon Fillet', 400, 'g', 400),
+(5, 12, 'Broccoli', 200, 'g', 200),
+(5, 9, 'Carrot', 150, 'g', 150),
+(5, 22, 'Olive Oil', 30, 'ml', 30),
+(5, 23, 'Salt', 5, 'g', 5),
+(5, 24, 'Black Pepper', 3, 'g', 3);
 
 -- Recipe 6: Beef Tacos
-INSERT INTO recipe_ingredients (recipe_id, ingredient_id, required_quantity) VALUES
-(6, 2, 500),    -- Ground Beef
-(6, 7, 100),    -- Onion
-(6, 6, 200),    -- Tomato
-(6, 8, 10),     -- Garlic
-(6, 31, 10),    -- Cumin
-(6, 32, 8);     -- Paprika
+INSERT INTO recipe_ingredients (recipe_id, ingredient_id, item_name, amount, unit, required_quantity) VALUES
+(6, 2, 'Ground Beef', 500, 'g', 500),
+(6, 7, 'Onion', 100, 'g', 100),
+(6, 6, 'Tomato', 200, 'g', 200),
+(6, 8, 'Garlic', 10, 'g', 10),
+(6, 31, 'Cumin', 10, 'g', 10),
+(6, 32, 'Paprika', 8, 'g', 8);
 
 -- Recipe 7: Veggie Stir Fry
-INSERT INTO recipe_ingredients (recipe_id, ingredient_id, required_quantity) VALUES
-(7, 5, 300),    -- Tofu
-(7, 10, 150),   -- Bell Pepper
-(7, 12, 150),   -- Broccoli
-(7, 9, 100),    -- Carrot
-(7, 8, 15),     -- Garlic
-(7, 26, 40),    -- Soy Sauce
-(7, 22, 30);    -- Olive Oil
+INSERT INTO recipe_ingredients (recipe_id, ingredient_id, item_name, amount, unit, required_quantity) VALUES
+(7, 5, 'Tofu', 300, 'g', 300),
+(7, 10, 'Bell Pepper', 150, 'g', 150),
+(7, 12, 'Broccoli', 150, 'g', 150),
+(7, 9, 'Carrot', 100, 'g', 100),
+(7, 8, 'Garlic', 15, 'g', 15),
+(7, 26, 'Soy Sauce', 40, 'ml', 40),
+(7, 22, 'Olive Oil', 30, 'ml', 30);
