@@ -25,9 +25,13 @@ interface RecipeCookability {
   missingIngredients: MissingIngredient[];
 }
 
+type RecipeSourceMode = 'generated' | 'database';
+
 type RecipeTypeKey = keyof typeof cardMeta;
 
 const STAPLES = new Set(['salt', 'water', 'oil']);
+const GENERATED_MATCH_THRESHOLD = 100;
+const DATABASE_MATCH_THRESHOLD = 70;
 
 function formatAmount(amount: number): string {
   return Number.isInteger(amount) ? amount.toString() : amount.toFixed(2).replace(/\.00$/, '');
@@ -333,6 +337,7 @@ function normalizeRecipesForDisplay(recipes: unknown[]): GeneratedRecipe[] {
 
 export default function Recipes() {
   const [recipes, setRecipes] = useState<GeneratedRecipe[] | null>(null);
+  const [recipeSourceMode, setRecipeSourceMode] = useState<RecipeSourceMode>('generated');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -364,6 +369,7 @@ export default function Recipes() {
 
             if (savedRecipes.length > 0) {
               setRecipes(savedRecipes);
+              setRecipeSourceMode('database');
             }
           } catch {
             // Keep page usable if saved recipe lookup fails.
@@ -410,8 +416,10 @@ export default function Recipes() {
           ? normalizeRecipesForDisplay(savedResponse.recipes)
           : normalizeRecipesForDisplay(generated.recipes);
         setRecipes(savedRecipes);
+        setRecipeSourceMode('generated');
       } catch (saveErr: unknown) {
         setRecipes(normalizeRecipesForDisplay(generated.recipes));
+        setRecipeSourceMode('generated');
 
         const typedSaveError = saveErr as {
           response?: { data?: { message?: string; error?: string } };
@@ -485,6 +493,7 @@ export default function Recipes() {
         ? normalizeRecipesForDisplay(matchingResponse.recipes)
         : [];
       setRecipes(matchingRecipes);
+      setRecipeSourceMode('database');
     } catch {
       // ApiClient surfaces the backend error as toast.
     } finally {
@@ -547,12 +556,20 @@ export default function Recipes() {
 
       {recipes && recipes.length > 0 && (
         <>
-          {recipes.every((recipe) => {
-            const stats = getRecipeMatchStats(recipe, inventoryItems, peopleCount);
-            return stats.totalIngredients < 3 || stats.matchPercentage < 70;
-          }) && (
+          {(() => {
+            const activeThreshold = recipeSourceMode === 'generated'
+              ? GENERATED_MATCH_THRESHOLD
+              : DATABASE_MATCH_THRESHOLD;
+
+            return recipes.every((recipe) => {
+              const stats = getRecipeMatchStats(recipe, inventoryItems, peopleCount);
+              return stats.totalIngredients < 3 || stats.matchPercentage < activeThreshold;
+            });
+          })() && (
             <Alert variant="warning" className="mt-3">
-              None of the generated recipes meet the 70% ingredient match threshold with at least 3 recipe ingredients. Try adding more ingredients to your inventory or generating new recipes.
+              {recipeSourceMode === 'generated'
+                ? 'None of the generated recipes are a 100% ingredient match with at least 3 recipe ingredients. Try generating again or add more ingredients to inventory.'
+                : 'No saved recipe from database meets the 70% ingredient match threshold with at least 3 recipe ingredients.'}
             </Alert>
           )}
           <Row className="mt-3 g-3">
@@ -561,7 +578,12 @@ export default function Recipes() {
                 const matchStats = getRecipeMatchStats(recipe, inventoryItems, peopleCount);
                 return { recipe, recipeIndex, matchStats };
               })
-              .filter(({ matchStats }) => matchStats.totalIngredients >= 3 && matchStats.matchPercentage >= 70)
+              .filter(({ matchStats }) => {
+                const activeThreshold = recipeSourceMode === 'generated'
+                  ? GENERATED_MATCH_THRESHOLD
+                  : DATABASE_MATCH_THRESHOLD;
+                return matchStats.totalIngredients >= 3 && matchStats.matchPercentage >= activeThreshold;
+              })
               .map(({ recipe, recipeIndex, matchStats }) => {
                 const recipeType = normalizeRecipeType(recipe.type);
                 const meta = cardMeta[recipeType];

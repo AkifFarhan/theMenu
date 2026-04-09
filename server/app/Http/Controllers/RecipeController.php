@@ -19,6 +19,8 @@ class RecipeController extends Controller
 {
     private array $staples = ['salt', 'water', 'oil'];
 
+    private const DATABASE_MATCH_THRESHOLD = 70;
+
     private ?array $columnCache = null;
 
     public function getMatchingRecipes()
@@ -49,13 +51,20 @@ class RecipeController extends Controller
             $matching = $recipes
                 ->map(function (Recipe $recipe) use ($inventoryItems) {
                     $availability = $this->evaluateRecipeAvailability($recipe, $inventoryItems, 1);
+                    $matchStats = $this->evaluateRecipeMatchStats($recipe, $inventoryItems, 1);
 
                     return [
                         'recipe' => $recipe,
                         'availability' => $availability,
+                        'matchStats' => $matchStats,
                     ];
                 })
-                ->filter(fn (array $entry) => $entry['availability']['canCook'] === true)
+                ->filter(function (array $entry) {
+                    $stats = $entry['matchStats'];
+
+                    return $stats['totalIngredients'] > 0
+                        && $stats['matchPercentage'] >= self::DATABASE_MATCH_THRESHOLD;
+                })
                 ->values();
 
             return response()->json([
@@ -64,8 +73,9 @@ class RecipeController extends Controller
                         return array_merge(
                             $this->formatRecipe($entry['recipe']),
                             [
-                                'canCook' => true,
-                                'missingIngredients' => [],
+                                'canCook' => $entry['availability']['canCook'],
+                                'missingIngredients' => $entry['availability']['missingIngredients'],
+                                'matchPercentage' => $entry['matchStats']['matchPercentage'],
                             ]
                         );
                     })
@@ -527,6 +537,70 @@ class RecipeController extends Controller
             'canCook' => count($missing) === 0,
             'missingIngredients' => $missing,
             'deductions' => array_values($deductions),
+        ];
+    }
+
+    private function evaluateRecipeMatchStats(Recipe $recipe, Collection $inventoryItems, int $peopleCount): array
+    {
+        if ($recipe->recipeIngredients->isEmpty()) {
+            return [
+                'totalIngredients' => 0,
+                'matchingIngredients' => 0,
+                'matchPercentage' => 0,
+            ];
+        }
+
+        [$inventoryByIngredientId, $inventoryByName] = $this->buildInventoryLookups($inventoryItems);
+
+        $totalIngredients = 0;
+        $matchingIngredients = 0;
+
+        foreach ($recipe->recipeIngredients as $recipeIngredient) {
+            $ingredientName = $this->getRecipeIngredientName($recipeIngredient);
+            $normalizedName = strtolower(trim($ingredientName));
+
+            if ($normalizedName === '' || in_array($normalizedName, $this->staples, true)) {
+                continue;
+            }
+
+            $totalIngredients++;
+
+            $requiredAmount = $this->getRecipeIngredientAmount($recipeIngredient) * $peopleCount;
+            $requiredUnit = $this->getRecipeIngredientUnit($recipeIngredient);
+
+            /** @var Inventory|null $inventoryItem */
+            $inventoryItem = null;
+            if ($recipeIngredient->ingredient_id !== null && isset($inventoryByIngredientId[$recipeIngredient->ingredient_id])) {
+                $inventoryItem = $inventoryByIngredientId[$recipeIngredient->ingredient_id];
+            } elseif (isset($inventoryByName[$normalizedName])) {
+                $inventoryItem = $inventoryByName[$normalizedName];
+            }
+
+            if (!$inventoryItem) {
+                continue;
+            }
+
+            $inventoryUnit = (string) ($inventoryItem->ingredient?->base_unit ?? 'piece');
+            $requiredInInventoryUnit = $this->convertAmountToBase($requiredAmount, $requiredUnit, $inventoryUnit);
+
+            if ($requiredInInventoryUnit === null) {
+                continue;
+            }
+
+            $availableQuantity = (float) $inventoryItem->quantity;
+            if ($availableQuantity + 0.0001 >= $requiredInInventoryUnit) {
+                $matchingIngredients++;
+            }
+        }
+
+        $matchPercentage = $totalIngredients > 0
+            ? (int) round(($matchingIngredients / $totalIngredients) * 100)
+            : 0;
+
+        return [
+            'totalIngredients' => $totalIngredients,
+            'matchingIngredients' => $matchingIngredients,
+            'matchPercentage' => $matchPercentage,
         ];
     }
 
