@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import toast from 'react-hot-toast';
-import { getRecipesFromInventory, type GeneratedRecipe } from '../services/geminiService';
+import { getRecipesFromInventory, type GeneratedRecipe } from '../services/recipeSuggestionService';
 import ApiClient from '../api';
 
 interface Item {
@@ -25,7 +25,7 @@ interface RecipeCookability {
   missingIngredients: MissingIngredient[];
 }
 
-type RecipeSourceMode = 'generated' | 'database';
+type RecipeSourceMode = 'generated' | 'database' | 'fallback';
 
 type RecipeTypeKey = keyof typeof cardMeta;
 
@@ -398,6 +398,16 @@ export default function Recipes() {
 
   const canGenerate = inventoryNames.length > 0 && !isLoading && cooldownSeconds === 0;
 
+  const parseRetryAfterSeconds = (message: string): number | null => {
+    const match = message.match(/retry after\s+(\d+)s/i);
+    if (!match?.[1]) {
+      return null;
+    }
+
+    const parsed = Number.parseInt(match[1], 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  };
+
   const handleGenerate = async () => {
     setError(null);
     setSuccessMessage(null);
@@ -435,30 +445,56 @@ export default function Recipes() {
         setError(`Recipe generated, but failed to save to database. ${detailedMessage}`);
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to generate recipes right now.';
+      const message = err instanceof Error ? err.message : 'Failed to suggest recipes right now.';
       if (message.includes('429')) {
+        const retryAfter = parseRetryAfterSeconds(message);
+        if (retryAfter !== null) {
+          setCooldownSeconds(Math.max(retryAfter, 5));
+        } else {
+          setCooldownSeconds(30);
+        }
         const fallbackRecipes = localFallbackRecipes(inventoryNames);
         setRecipes(normalizeRecipesForDisplay(fallbackRecipes));
-        setError('Gemini is rate-limited right now. Showing local fallback recipes.');
+        setRecipeSourceMode('fallback');
+        setError(
+          retryAfter !== null
+            ? `Rate limit reached. Please wait ${retryAfter}s, then try again. Showing local fallback recipes.`
+            : 'Rate limit reached. Please wait about 30s, then try again. Showing local fallback recipes.'
+        );
+      } else if (
+        message.toLowerCase().includes('high demand') ||
+        message.includes('503') ||
+        message.toLowerCase().includes('try again later')
+      ) {
+        const retryAfter = parseRetryAfterSeconds(message) ?? 30;
+        setCooldownSeconds(Math.max(retryAfter, 10));
+        const fallbackRecipes = localFallbackRecipes(inventoryNames);
+        setRecipes(normalizeRecipesForDisplay(fallbackRecipes));
+        setRecipeSourceMode('fallback');
+        setError(`Gemini is busy right now. Please wait ${retryAfter}s and try again. Showing local fallback recipes.`);
       } else if (
         message.toLowerCase().includes('unexpected format') ||
         message.toLowerCase().includes('json')
       ) {
         const fallbackRecipes = localFallbackRecipes(inventoryNames);
         setRecipes(normalizeRecipesForDisplay(fallbackRecipes));
-        setError('Gemini returned an unexpected format. Showing local fallback recipes for now.');
+        setRecipeSourceMode('fallback');
+        setError('Recipe service returned an unexpected format. Showing local fallback recipes for now.');
       } else if (
         message.includes('403') ||
         message.toLowerCase().includes('api key') ||
         message.toLowerCase().includes('permission') ||
-        message.toLowerCase().includes('leaked') ||
-        message.toLowerCase().includes('missing vite_gemini_api_key')
+        message.toLowerCase().includes('leaked')
       ) {
         const fallbackRecipes = localFallbackRecipes(inventoryNames);
         setRecipes(normalizeRecipesForDisplay(fallbackRecipes));
+        setRecipeSourceMode('fallback');
         setError(`${message} Showing local fallback recipes for now.`);
       } else {
-        setError(message);
+        const fallbackRecipes = localFallbackRecipes(inventoryNames);
+        setRecipes(normalizeRecipesForDisplay(fallbackRecipes));
+        setRecipeSourceMode('fallback');
+        setError(`${message} Showing local fallback recipes for now.`);
       }
     } finally {
       setIsLoading(false);
@@ -538,7 +574,7 @@ export default function Recipes() {
       {isLoading && (
         <Alert variant="info" className="mt-3 d-flex align-items-center gap-2 mb-0">
           <Spinner animation="border" size="sm" />
-          Chef Gemini is checking the pantry...
+          Building recipe suggestions from your pantry...
         </Alert>
       )}
 
@@ -559,7 +595,9 @@ export default function Recipes() {
           {(() => {
             const activeThreshold = recipeSourceMode === 'generated'
               ? GENERATED_MATCH_THRESHOLD
-              : DATABASE_MATCH_THRESHOLD;
+              : recipeSourceMode === 'database'
+                ? DATABASE_MATCH_THRESHOLD
+                : 0;
 
             return recipes.every((recipe) => {
               const stats = getRecipeMatchStats(recipe, inventoryItems, peopleCount);
@@ -569,7 +607,9 @@ export default function Recipes() {
             <Alert variant="warning" className="mt-3">
               {recipeSourceMode === 'generated'
                 ? 'None of the generated recipes are a 100% ingredient match with at least 3 recipe ingredients. Try generating again or add more ingredients to inventory.'
-                : 'No saved recipe from database meets the 70% ingredient match threshold with at least 3 recipe ingredients.'}
+                : recipeSourceMode === 'database'
+                  ? 'No saved recipe from database meets the 70% ingredient match threshold with at least 3 recipe ingredients.'
+                  : 'Showing fallback recipes while Gemini is temporarily unavailable.'}
             </Alert>
           )}
           <Row className="mt-3 g-3">
@@ -581,7 +621,9 @@ export default function Recipes() {
               .filter(({ matchStats }) => {
                 const activeThreshold = recipeSourceMode === 'generated'
                   ? GENERATED_MATCH_THRESHOLD
-                  : DATABASE_MATCH_THRESHOLD;
+                  : recipeSourceMode === 'database'
+                    ? DATABASE_MATCH_THRESHOLD
+                    : 0;
                 return matchStats.totalIngredients >= 3 && matchStats.matchPercentage >= activeThreshold;
               })
               .map(({ recipe, recipeIndex, matchStats }) => {

@@ -14,12 +14,10 @@ class Recipe extends Model
         'preparation_time',
         'base_servings',
         'description',
-        'is_ai_generated',
         'created_by',
     ];
 
     protected $casts = [
-        'is_ai_generated' => 'boolean',
         'base_servings' => 'integer',
     ];
 

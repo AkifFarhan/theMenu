@@ -5,7 +5,7 @@
 USE themenu;
 
 -- ==========================================
--- USERS (passwords are hashed versions of 'password123' for demonstration)
+-- USERS (passwords are hashed versions of 'password' for demonstration)
 -- ==========================================
 INSERT INTO users (username, email, password_hash) VALUES
 ('alice_chef', 'alice@example.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi'),
@@ -104,14 +104,14 @@ INSERT INTO inventories (user_id, ingredient_id, quantity, expiry_date) VALUES
 -- ==========================================
 -- RECIPES
 -- ==========================================
-INSERT INTO recipes (recipe_type, title, preparation_time, base_servings, description, is_ai_generated, created_by) VALUES
-('quick', 'Classic Spaghetti Carbonara', '25 mins', 1, 'Creamy Italian pasta with eggs and cheese', 0, 1),
-('quick', 'Garlic Butter Chicken', '30 mins', 1, 'Pan-seared chicken with garlic butter sauce', 0, 1),
-('quick', 'Fried Rice', '20 mins', 1, 'Asian-style fried rice with vegetables and eggs', 0, 2),
-('healthy', 'Tomato Basil Soup', '35 mins', 1, 'Simple and comforting tomato soup', 1, NULL),
-('healthy', 'Grilled Salmon with Veggies', '35 mins', 1, 'Healthy grilled salmon with roasted vegetables', 0, 3),
-('surprise', 'Beef Tacos', '30 mins', 1, 'Mexican-style ground beef tacos', 1, NULL),
-('quick', 'Veggie Stir Fry', '20 mins', 1, 'Quick vegetable stir fry with tofu', 0, 4);
+INSERT INTO recipes (recipe_type, title, preparation_time, base_servings, description, created_by) VALUES
+('quick', 'Classic Spaghetti Carbonara', '25 mins', 1, 'Creamy Italian pasta with eggs and cheese', 1),
+('quick', 'Garlic Butter Chicken', '30 mins', 1, 'Pan-seared chicken with garlic butter sauce', 1),
+('quick', 'Fried Rice', '20 mins', 1, 'Asian-style fried rice with vegetables and eggs', 2),
+('healthy', 'Tomato Basil Soup', '35 mins', 1, 'Simple and comforting tomato soup', NULL),
+('healthy', 'Grilled Salmon with Veggies', '35 mins', 1, 'Healthy grilled salmon with roasted vegetables', 3),
+('surprise', 'Beef Tacos', '30 mins', 1, 'Mexican-style ground beef tacos', NULL),
+('quick', 'Veggie Stir Fry', '20 mins', 1, 'Quick vegetable stir fry with tofu', 4);
 
 -- ==========================================
 -- RECIPE INGREDIENTS
