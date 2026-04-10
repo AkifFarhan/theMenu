@@ -19,13 +19,9 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => array_values(array_filter(array_map('trim', explode(',', env('CORS_ALLOWED_ORIGINS', env('FRONTEND_URL', 'http://localhost:5173')))))),
+    'allowed_origins' => [env('FRONTEND_URL', 'http://localhost:5173')],
 
-    'allowed_origins_patterns' => [
-        '#^https?://localhost(:\\d+)?$#',
-        '#^https?://127\\.0\\.0\\.1(:\\d+)?$#',
-        '#^https?://192\\.168\\.\\d+\\.\\d+(:\\d+)?$#',
-    ],
+    'allowed_origins_patterns' => [],
 
     'allowed_headers' => ['*'],
 
