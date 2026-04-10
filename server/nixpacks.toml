@@ -8,8 +8,7 @@ nixPkgs = [
   "php82Extensions.xml",
   "php82Extensions.curl",
   "php82Extensions.fileinfo",
-  "php82Extensions.openssl",
-  "composer"
+  "php82Extensions.openssl"
 ]
 
 [phases.build]
