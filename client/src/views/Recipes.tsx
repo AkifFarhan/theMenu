@@ -43,23 +43,32 @@ function normalizeCuisine(cuisine: unknown): CuisineType | '' {
   return CUISINE_OPTIONS.some((option) => option.value === normalized) ? (normalized as CuisineType) : '';
 }
 
-type SelectedCuisine = CuisineType | 'all' | '';
+type SelectedCuisine = CuisineType | 'none' | '';
 
 function normalizeSelectedCuisine(cuisine: unknown): SelectedCuisine {
   const normalized = String(cuisine ?? '').trim().toLowerCase();
-  if (normalized === 'all') {
-    return 'all';
+  if (normalized === 'none') {
+    return 'none';
   }
 
   return normalizeCuisine(normalized);
 }
 
 function cuisineLabel(cuisine: SelectedCuisine): string {
-  if (cuisine === 'all') {
-    return 'All cuisines';
+  if (cuisine === 'none') {
+    return 'No cuisine';
   }
 
   return CUISINE_OPTIONS.find((option) => option.value === cuisine)?.label ?? 'Cuisine';
+}
+
+function resolveFallbackCuisine(cuisine: SelectedCuisine): CuisineType {
+  if (cuisine && cuisine !== 'none') {
+    return cuisine;
+  }
+
+  const randomIndex = Math.floor(Math.random() * CUISINE_OPTIONS.length);
+  return CUISINE_OPTIONS[randomIndex]?.value ?? 'indian';
 }
 
 function formatAmount(amount: number): string {
@@ -422,8 +431,7 @@ export default function Recipes() {
   }, [cooldownSeconds]);
 
   const canLoadFromDb = inventoryNames.length > 0 && selectedCuisine !== '' && !isLoading;
-  const canGenerate =
-    inventoryNames.length > 0 && selectedCuisine !== '' && selectedCuisine !== 'all' && !isLoading && cooldownSeconds === 0;
+  const canGenerate = inventoryNames.length > 0 && selectedCuisine !== '' && !isLoading && cooldownSeconds === 0;
 
   const parseRetryAfterSeconds = (message: string): number | null => {
     const match = message.match(/retry after\s+(\d+)s/i);
@@ -448,7 +456,7 @@ export default function Recipes() {
     setLoadingAction('db');
 
     try {
-      const savedRecipesResponse = await api.getMatchingRecipes(selectedCuisine === 'all' ? undefined : selectedCuisine);
+      const savedRecipesResponse = await api.getMatchingRecipes(selectedCuisine === 'none' ? undefined : selectedCuisine);
       const savedRecipes = Array.isArray(savedRecipesResponse?.recipes)
         ? normalizeRecipesForDisplay(savedRecipesResponse.recipes)
         : [];
@@ -458,8 +466,8 @@ export default function Recipes() {
         setRecipeSourceMode('database');
         setCurrentPage(1);
         setError(
-          selectedCuisine === 'all'
-            ? 'No recipes found in database. Try Generate New Recipes for a specific cuisine.'
+          selectedCuisine === 'none'
+            ? 'No recipes found in database. Try Generate New Recipes for random cuisine recipes.'
             : `No ${cuisineLabel(selectedCuisine)} recipes found in database. Try Generate New Recipes.`
         );
         return;
@@ -468,7 +476,11 @@ export default function Recipes() {
       setRecipes(savedRecipes);
       setRecipeSourceMode('database');
       setCurrentPage(1);
-      setSuccessMessage(`Loaded ${cuisineLabel(selectedCuisine)} recipes from the database.`);
+      setSuccessMessage(
+        selectedCuisine === 'none'
+          ? 'Loaded recipes from the database.'
+          : `Loaded ${cuisineLabel(selectedCuisine)} recipes from the database.`
+      );
     } catch {
       setError('Failed to load recipes from database right now.');
     } finally {
@@ -491,24 +503,17 @@ export default function Recipes() {
       return;
     }
 
-    if (selectedCuisine === 'all') {
-      setError('Please choose a specific cuisine to generate new recipes.');
-      setIsLoading(false);
-      setLoadingAction(null);
-      return;
-    }
-
     try {
       const generated = await getRecipesFromInventory(
         inventoryNames,
         inventoryItems.map((item) => ({ name: item.name, unit: item.unit })),
-        selectedCuisine
+        selectedCuisine === 'none' ? undefined : selectedCuisine
       );
 
       try {
         const payloadWithCuisine = generated.recipes.map((recipe) => ({
           ...recipe,
-          cuisine: selectedCuisine,
+          cuisine: selectedCuisine === 'none' ? recipe.cuisine : selectedCuisine,
         }));
         const savedResponse = await api.saveGeneratedRecipes(payloadWithCuisine);
         const savedRecipes = Array.isArray(savedResponse?.recipes)
@@ -517,7 +522,11 @@ export default function Recipes() {
         setRecipes(savedRecipes);
         setRecipeSourceMode('generated');
         setCurrentPage(1);
-        setSuccessMessage(`Generated new ${cuisineLabel(selectedCuisine)} recipes.`);
+        setSuccessMessage(
+          selectedCuisine === 'none'
+            ? 'Generated new random cuisine recipes.'
+            : `Generated new ${cuisineLabel(selectedCuisine)} recipes.`
+        );
       } catch (saveErr: unknown) {
         setRecipes(normalizeRecipesForDisplay(generated.recipes));
         setRecipeSourceMode('generated');
@@ -545,7 +554,7 @@ export default function Recipes() {
         } else {
           setCooldownSeconds(30);
         }
-        const fallbackRecipes = localFallbackRecipes(inventoryNames, selectedCuisine);
+        const fallbackRecipes = localFallbackRecipes(inventoryNames, resolveFallbackCuisine(selectedCuisine));
         setRecipes(normalizeRecipesForDisplay(fallbackRecipes));
         setRecipeSourceMode('fallback');
         setCurrentPage(1);
@@ -561,7 +570,7 @@ export default function Recipes() {
       ) {
         const retryAfter = parseRetryAfterSeconds(message) ?? 30;
         setCooldownSeconds(Math.max(retryAfter, 10));
-        const fallbackRecipes = localFallbackRecipes(inventoryNames, selectedCuisine);
+        const fallbackRecipes = localFallbackRecipes(inventoryNames, resolveFallbackCuisine(selectedCuisine));
         setRecipes(normalizeRecipesForDisplay(fallbackRecipes));
         setRecipeSourceMode('fallback');
         setCurrentPage(1);
@@ -570,7 +579,7 @@ export default function Recipes() {
         message.toLowerCase().includes('unexpected format') ||
         message.toLowerCase().includes('json')
       ) {
-        const fallbackRecipes = localFallbackRecipes(inventoryNames, selectedCuisine);
+        const fallbackRecipes = localFallbackRecipes(inventoryNames, resolveFallbackCuisine(selectedCuisine));
         setRecipes(normalizeRecipesForDisplay(fallbackRecipes));
         setRecipeSourceMode('fallback');
         setCurrentPage(1);
@@ -581,13 +590,13 @@ export default function Recipes() {
         message.toLowerCase().includes('permission') ||
         message.toLowerCase().includes('leaked')
       ) {
-        const fallbackRecipes = localFallbackRecipes(inventoryNames, selectedCuisine);
+        const fallbackRecipes = localFallbackRecipes(inventoryNames, resolveFallbackCuisine(selectedCuisine));
         setRecipes(normalizeRecipesForDisplay(fallbackRecipes));
         setRecipeSourceMode('fallback');
         setCurrentPage(1);
         setError(`${message} Showing local fallback recipes for now.`);
       } else {
-        const fallbackRecipes = localFallbackRecipes(inventoryNames, selectedCuisine);
+        const fallbackRecipes = localFallbackRecipes(inventoryNames, resolveFallbackCuisine(selectedCuisine));
         setRecipes(normalizeRecipesForDisplay(fallbackRecipes));
         setRecipeSourceMode('fallback');
         setCurrentPage(1);
@@ -623,7 +632,7 @@ export default function Recipes() {
       setInventoryNames(items.map((item) => item.name).filter(Boolean));
 
       const matchingResponse = await api.getMatchingRecipes(
-        selectedCuisine && selectedCuisine !== 'all' ? selectedCuisine : undefined
+        selectedCuisine && selectedCuisine !== 'none' ? selectedCuisine : undefined
       );
       const matchingRecipes = Array.isArray(matchingResponse?.recipes)
         ? normalizeRecipesForDisplay(matchingResponse.recipes)
@@ -691,7 +700,7 @@ export default function Recipes() {
               }}
             >
               <option value="">Choose cuisine</option>
-              <option value="all">All cuisine</option>
+              <option value="none">No cuisine</option>
               {CUISINE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}

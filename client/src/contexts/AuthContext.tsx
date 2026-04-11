@@ -26,11 +26,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     // Check if user is already logged in
-    const currentUser = api.getCurrentUser();
-    if (currentUser) {
-      setUser(currentUser);
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      // Fetch user from server to get fresh data
+      api
+        .getMe()
+        .then((response) => {
+          if (response.user) {
+            setUser(response.user);
+            // Update localStorage with fresh user data
+            localStorage.setItem('user', JSON.stringify(response.user));
+          }
+        })
+        .catch(() => {
+          // If getMe fails, try localStorage fallback
+          const currentUser = api.getCurrentUser();
+          if (currentUser) {
+            setUser(currentUser);
+          }
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    } else {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   const login = async (email: string, password: string) => {
