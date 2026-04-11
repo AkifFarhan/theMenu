@@ -336,7 +336,7 @@ function buildRecipe(
 export async function getRecipesFromInventory(
   inventoryArray: string[],
   inventoryUnitHints: Array<{ name: string; unit: string }> = [],
-  cuisine: CuisineType = DEFAULT_CUISINE
+  cuisine?: CuisineType
 ): Promise<RecipeResponse> {
   if (!Array.isArray(inventoryArray) || inventoryArray.length === 0) {
     throw new Error('Please add ingredients to your inventory first.');
@@ -351,8 +351,10 @@ export async function getRecipesFromInventory(
   }
 
   const preferredUnits = preferredUnitMap(inventoryUnitHints);
-  const normalizedCuisine = normalizeCuisine(cuisine, DEFAULT_CUISINE) ?? DEFAULT_CUISINE;
-  const cuisineLabel = CUISINE_OPTIONS.find((option) => option.value === normalizedCuisine)?.label ?? normalizedCuisine;
+  const normalizedCuisine = normalizeCuisine(cuisine);
+  const randomCuisineGuide = CUISINE_OPTIONS.map((option) => option.value).join(', ');
+  const fallbackCuisine =
+    normalizedCuisine ?? CUISINE_OPTIONS[Math.floor(Math.random() * CUISINE_OPTIONS.length)]?.value ?? DEFAULT_CUISINE;
 
   const ingredients = cleanedInventory.join(', ');
   const unitHintText = inventoryUnitHints
@@ -367,7 +369,11 @@ export async function getRecipesFromInventory(
   const prompt = `I have these ingredients: ${ingredients}.
 Role: You are a Culinary Data Engineer Agent.
 
-Task: Based on the provided ingredient list, suggest 3 distinct recipes classified as quick, healthy, and surprise with a ${cuisineLabel} cuisine focus.
+Task: Based on the provided ingredient list, suggest 3 distinct recipes classified as quick, healthy, and surprise${
+    normalizedCuisine
+      ? ` with a ${CUISINE_OPTIONS.find((option) => option.value === normalizedCuisine)?.label ?? normalizedCuisine} cuisine focus`
+      : ` with random cuisine inspiration chosen from ${randomCuisineGuide}`
+  }.
 
 Core Logic Rules:
 - The Single-Person Rule is mandatory: calculate all ingredient measurements for exactly one person.
@@ -378,14 +384,18 @@ Core Logic Rules:
 - Pantry matching is mandatory: use only provided inventory ingredients, but common staples (salt, water, oil) are allowed.
 - Structure is mandatory: each recipe must have exactly 3 concise steps.
 - Instruction text may use user-friendly wording and convenient kitchen measurements for readability.
-- Set the cuisine field on every recipe to "${normalizedCuisine}".
+- Set the cuisine field on every recipe.${
+    normalizedCuisine
+      ? ` Use exactly "${normalizedCuisine}".`
+      : ` Choose one cuisine value from: ${randomCuisineGuide}.`
+  }
 
 Respond with ONLY valid JSON in this exact structure:
 {
   "recipes": [
     {
       "type": "quick",
-      "cuisine": "${normalizedCuisine}",
+      "cuisine": "${normalizedCuisine ?? fallbackCuisine}",
       "title": "",
       "description": "",
       "preparationTime": "15 mins",
@@ -397,7 +407,7 @@ Respond with ONLY valid JSON in this exact structure:
     },
     {
       "type": "healthy",
-      "cuisine": "${normalizedCuisine}",
+      "cuisine": "${normalizedCuisine ?? fallbackCuisine}",
       "title": "",
       "description": "",
       "preparationTime": "20 mins",
@@ -409,7 +419,7 @@ Respond with ONLY valid JSON in this exact structure:
     },
     {
       "type": "surprise",
-      "cuisine": "${normalizedCuisine}",
+      "cuisine": "${normalizedCuisine ?? fallbackCuisine}",
       "title": "",
       "description": "",
       "preparationTime": "25 mins",
@@ -452,7 +462,7 @@ Respond with ONLY valid JSON in this exact structure:
 
         recipeByType.set(type, {
           type,
-          cuisine: normalizeCuisine(match.cuisine, normalizedCuisine) ?? normalizedCuisine,
+          cuisine: normalizeCuisine(match.cuisine, fallbackCuisine) ?? fallbackCuisine,
           title: String(match.title ?? `${type} recipe`).trim() || `${type} recipe`,
           description: String(match.description ?? '').trim() || `${type} recipe for one person.`,
           preparationTime: String(match.preparationTime ?? '20 mins').trim() || '20 mins',
@@ -466,7 +476,7 @@ Respond with ONLY valid JSON in this exact structure:
     }
 
     const recipes = RECIPE_TYPES.map(
-      (type) => recipeByType.get(type) ?? buildRecipe(type, cleanedInventory, preferredUnits, normalizedCuisine)
+      (type) => recipeByType.get(type) ?? buildRecipe(type, cleanedInventory, preferredUnits, fallbackCuisine)
     );
     return { recipes };
   } catch (error: unknown) {
