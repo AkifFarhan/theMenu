@@ -62,7 +62,7 @@ const BaseLayout: React.FC<BaseLayoutProps> = ({ children }) => {
       <main className="main-content">{children}</main>
 
       <footer className="site-footer">
-        <a className="site-footer__link" href="#">Contact us.</a>
+        <Link className="site-footer__link" to="/contact">Contact us.</Link>
         <span className="site-footer__copy">© Copyright theMenu</span>
       </footer>
     </div>
