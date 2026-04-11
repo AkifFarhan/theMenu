@@ -5,10 +5,10 @@ export type CuisineType = 'bengali' | 'indian' | 'chinese' | 'italian' | 'mexica
 
 export const CUISINE_OPTIONS: Array<{ value: CuisineType; label: string }> = [
   { value: 'bengali', label: 'Bengali' },
-  { value: 'inian', label: 'Indian' },
-  { value: 'cinese', label: 'Chinese' },
-  { value: 'alian', label: 'Italian' },
-  { value: 'exican', label: 'Mexican' },
+  { value: 'indian', label: 'Indian' },
+  { value: 'chinese', label: 'Chinese' },
+  { value: 'italian', label: 'Italian' },
+  { value: 'mexican', label: 'Mexican' },
 ];
 
 export interface RecipeIngredient {
@@ -294,7 +294,7 @@ function buildRecipe(
       ingredients,
       steps: [
         `Prep ${first}, ${second}, and ${third} into small pieces.`,
-        'Cook on mediumh heat for 8 to 10 minutes, stirring often.',
+        'Cook on medium-high heat for 8 to 10 minutes, stirring often.',
         'Season to taste and serve immediately.',
       ],
     };
