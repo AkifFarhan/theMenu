@@ -346,6 +346,8 @@ export default function Recipes() {
   const [inventoryItems, setInventoryItems] = useState<Item[]>([]);
   const [peopleCount, setPeopleCount] = useState(1);
   const [cookingRecipeKey, setCookingRecipeKey] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const recipesPerPage = 3;
 
   useEffect(() => {
     const loadInventory = async () => {
@@ -530,11 +532,42 @@ export default function Recipes() {
         : [];
       setRecipes(matchingRecipes);
       setRecipeSourceMode('database');
+      setCurrentPage(1);
     } catch {
       // ApiClient surfaces the backend error as toast.
     } finally {
       setCookingRecipeKey(null);
     }
+  };
+
+  // Pagination logic
+  const filteredRecipes = recipes
+    ? recipes
+        .map((recipe, recipeIndex) => {
+          const matchStats = getRecipeMatchStats(recipe, inventoryItems, peopleCount);
+          return { recipe, recipeIndex, matchStats };
+        })
+        .filter(({ matchStats }) => {
+          const activeThreshold = recipeSourceMode === 'generated'
+            ? GENERATED_MATCH_THRESHOLD
+            : recipeSourceMode === 'database'
+              ? DATABASE_MATCH_THRESHOLD
+              : 0;
+          return matchStats.totalIngredients >= 3 && matchStats.matchPercentage >= activeThreshold;
+        })
+    : [];
+
+  const totalPages = Math.ceil(filteredRecipes.length / recipesPerPage);
+  const startIndex = (currentPage - 1) * recipesPerPage;
+  const endIndex = startIndex + recipesPerPage;
+  const paginatedRecipes = filteredRecipes.slice(startIndex, endIndex);
+
+  const handlePreviousPage = () => {
+    setCurrentPage((prev) => Math.max(prev - 1, 1));
+  };
+
+  const handleNextPage = () => {
+    setCurrentPage((prev) => Math.min(prev + 1, totalPages));
   };
 
   return (
@@ -613,20 +646,7 @@ export default function Recipes() {
             </Alert>
           )}
           <Row className="mt-3 g-3">
-            {recipes
-              .map((recipe, recipeIndex) => {
-                const matchStats = getRecipeMatchStats(recipe, inventoryItems, peopleCount);
-                return { recipe, recipeIndex, matchStats };
-              })
-              .filter(({ matchStats }) => {
-                const activeThreshold = recipeSourceMode === 'generated'
-                  ? GENERATED_MATCH_THRESHOLD
-                  : recipeSourceMode === 'database'
-                    ? DATABASE_MATCH_THRESHOLD
-                    : 0;
-                return matchStats.totalIngredients >= 3 && matchStats.matchPercentage >= activeThreshold;
-              })
-              .map(({ recipe, recipeIndex, matchStats }) => {
+            {paginatedRecipes.map(({ recipe, recipeIndex, matchStats }) => {
                 const recipeType = normalizeRecipeType(recipe.type);
                 const meta = cardMeta[recipeType];
                 const recipeKey = `${recipe.type}-${recipe.title}-${recipeIndex}`;
@@ -698,6 +718,29 @@ export default function Recipes() {
                 );
               })}
           </Row>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="mt-4 d-flex gap-2 align-items-center justify-content-between">
+              <Button
+                variant="outline-secondary"
+                onClick={handlePreviousPage}
+                disabled={currentPage === 1}
+              >
+                ← Previous
+              </Button>
+              <span className="text-muted">
+                Page {currentPage} of {totalPages} ({filteredRecipes.length} matching recipes)
+              </span>
+              <Button
+                variant="outline-secondary"
+                onClick={handleNextPage}
+                disabled={currentPage === totalPages}
+              >
+                Next →
+              </Button>
+            </div>
+          )}
         </>
       )}
     </div>

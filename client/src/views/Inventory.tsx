@@ -49,6 +49,8 @@ export default function Inventory() {
   const [editingIds, setEditingIds] = useState<Set<number>>(new Set());
   const [editData, setEditData] = useState<Map<number, EditingItem>>(new Map());
   const [isSaving, setIsSaving] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 6;
   const navigate = useNavigate();
 
   // Check if an item is expired
@@ -174,6 +176,20 @@ export default function Inventory() {
     setEditData(new Map());
   };
 
+  // Pagination calculations
+  const totalPages = Math.ceil(items.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedItems = items.slice(startIndex, endIndex);
+
+  const handlePreviousPage = () => {
+    setCurrentPage((prev) => Math.max(prev - 1, 1));
+  };
+
+  const handleNextPage = () => {
+    setCurrentPage((prev) => Math.min(prev + 1, totalPages));
+  };
+
   return (
     <div className="inventory-page page-shell">
       <div className="d-flex align-items-center justify-content-between gap-3 flex-wrap page-heading-row">
@@ -215,7 +231,7 @@ export default function Inventory() {
 
       {/* 3. Data Rows */}
       {!isLoading &&
-        items.map((it) => {
+        paginatedItems.map((it) => {
           const isEditing = editingIds.has(it.id);
           const currentEditData = editData.get(it.id);
 
@@ -232,6 +248,7 @@ export default function Inventory() {
                       value={currentEditData.quantity}
                       onChange={(e) => handleEditChange(it.id, 'quantity', e.target.value)}
                       autoFocus
+                      min="0"
                     />
                   </td>
                   <td>
@@ -295,6 +312,29 @@ export default function Inventory() {
     </tbody>
   </Table>
 </div>
+
+{/* Pagination Controls */}
+{totalPages > 1 && !isLoading && items.length > 0 && (
+  <div className="mt-3 d-flex gap-2 align-items-center justify-content-between">
+    <Button
+      variant="outline-secondary"
+      onClick={handlePreviousPage}
+      disabled={currentPage === 1 || isSaving}
+    >
+      ← Previous
+    </Button>
+    <span className="text-muted">
+      Page {currentPage} of {totalPages} ({items.length} total items)
+    </span>
+    <Button
+      variant="outline-secondary"
+      onClick={handleNextPage}
+      disabled={currentPage === totalPages || isSaving}
+    >
+      Next →
+    </Button>
+  </div>
+)}
 
 {/* Bulk Action Buttons */}
 {editingIds.size > 0 && (
