@@ -1,8 +1,9 @@
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect } from "react";
 import { Button } from "react-bootstrap";
 import { Link, useNavigate } from "react-router-dom";
 import ApiClient from "../api";
 import toast from "react-hot-toast";
+import { useAuth } from "../contexts/AuthContext";
 
 interface BaseLayoutProps {
   children: ReactNode;
@@ -12,19 +13,13 @@ const api = new ApiClient();
 
 const BaseLayout: React.FC<BaseLayoutProps> = ({ children }) => {
   const navigate = useNavigate();
-  const [user, setUser] = useState<{ username: string; email: string } | null>(null);
+  const { user, loading } = useAuth();
 
   useEffect(() => {
-    // Check if user is authenticated
-    if (!api.isAuthenticated()) {
+    if (!loading && !user) {
       navigate('/login');
-      return;
     }
-
-    // Get user data from localStorage
-    const currentUser = api.getCurrentUser();
-    setUser(currentUser);
-  }, [navigate]);
+  }, [loading, user, navigate]);
 
   const handleLogout = async () => {
     const success = await api.logout();
@@ -34,7 +29,7 @@ const BaseLayout: React.FC<BaseLayoutProps> = ({ children }) => {
     }
   };
 
-  if (!user) {
+  if (loading || !user) {
     return null; // or a loading spinner
   }
 

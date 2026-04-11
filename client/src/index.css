@@ -616,6 +616,31 @@ footer {
   font-size: 16px;
 }
 
+.edit-form-container {
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(200, 145, 46, 0.4);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.profile-edit-label {
+  color: #1f2a44;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.profile-edit-input {
+  border: 1px solid #c8912e !important;
+  border-radius: 8px;
+  color: #1f2a44;
+  font-weight: 600;
+}
+
+.profile-edit-input:focus {
+  box-shadow: 0 0 0 3px rgba(200, 145, 46, 0.2) !important;
+  border-color: #c8912e !important;
+}
+
 .profile-section-title {
   color: #1b2f56;
   font-size: 22px;

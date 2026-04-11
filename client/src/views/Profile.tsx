@@ -1,10 +1,90 @@
-import { Alert, Badge, Button, Card, Col, Row, Spinner } from 'react-bootstrap';
+import { Alert, Badge, Button, Card, Col, Row, Spinner, Form } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useEffect, useState } from 'react';
+import { apiClient } from '../api';
+import toast from 'react-hot-toast';
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
+  const { user, loading, setUser } = useAuth();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editUsername, setEditUsername] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setEditUsername(user.username);
+      setEditEmail(user.email);
+    }
+  }, [user]);
+
+  const handleSaveProfile = async () => {
+    if (!editUsername.trim() || !editEmail.trim()) {
+      toast.error('Username and email are required');
+      return;
+    }
+
+    if ((currentPassword || newPassword || confirmPassword) && !currentPassword) {
+      toast.error('Current password is required to change password');
+      return;
+    }
+
+    if (newPassword || confirmPassword) {
+      if (newPassword.length < 6) {
+        toast.error('New password must be at least 6 characters');
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        toast.error('New password and confirm password do not match');
+        return;
+      }
+    }
+
+    setIsSaving(true);
+    try {
+      const response = await apiClient.updateUser({
+        username: editUsername.trim(),
+        email: editEmail.trim(),
+      });
+
+      if (response?.user) {
+        setUser(response.user);
+      }
+
+      if (newPassword) {
+        await apiClient.changePassword({
+          current_password: currentPassword,
+          new_password: newPassword,
+        });
+      }
+
+      toast.success('Profile updated successfully');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setIsEditing(false);
+    } catch (error) {
+      // Errors are surfaced via api client handler.
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    if (user) {
+      setEditUsername(user.username);
+      setEditEmail(user.email);
+    }
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setIsEditing(false);
+  };
 
   const initials = user?.username
     ? user.username
@@ -106,11 +186,87 @@ export default function Profile() {
                 <Button variant="outline-secondary" onClick={() => navigate('/recipes')}>
                   Open Recipes
                 </Button>
+                <Button variant="outline-secondary" onClick={() => setIsEditing(true)}>
+                  Edit Profile
+                </Button>
               </div>
             </Card.Body>
           </Card>
         </Col>
       </Row>
+
+      {isEditing && (
+        <Card className="themed-card profile-card mt-3">
+          <Card.Body>
+            <h3 className="profile-section-title mb-3">Edit Profile</h3>
+            <div className="edit-form-container">
+              <Form.Group className="mb-3">
+                <Form.Label className="profile-edit-label">Username</Form.Label>
+                <Form.Control
+                  className="profile-edit-input"
+                  type="text"
+                  value={editUsername}
+                  onChange={(e) => setEditUsername(e.target.value)}
+                  placeholder="Enter username"
+                />
+              </Form.Group>
+
+              <Form.Group className="mb-3">
+                <Form.Label className="profile-edit-label">Email</Form.Label>
+                <Form.Control
+                  className="profile-edit-input"
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  placeholder="Enter email"
+                />
+              </Form.Group>
+
+              <Form.Group className="mb-3">
+                <Form.Label className="profile-edit-label">Current Password</Form.Label>
+                <Form.Control
+                  className="profile-edit-input"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Required only if changing password"
+                />
+              </Form.Group>
+
+              <Form.Group className="mb-3">
+                <Form.Label className="profile-edit-label">New Password</Form.Label>
+                <Form.Control
+                  className="profile-edit-input"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Leave blank to keep current password"
+                />
+              </Form.Group>
+
+              <Form.Group className="mb-3">
+                <Form.Label className="profile-edit-label">Confirm New Password</Form.Label>
+                <Form.Control
+                  className="profile-edit-input"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter new password"
+                />
+              </Form.Group>
+
+              <div className="d-flex gap-2">
+                <Button className="btn-navy" onClick={handleSaveProfile} disabled={isSaving}>
+                  {isSaving ? 'Saving...' : 'Save Changes'}
+                </Button>
+                <Button variant="outline-secondary" onClick={handleCancelEdit} disabled={isSaving}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </Card.Body>
+        </Card>
+      )}
     </section>
   );
 }
