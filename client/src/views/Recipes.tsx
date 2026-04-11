@@ -43,7 +43,22 @@ function normalizeCuisine(cuisine: unknown): CuisineType | '' {
   return CUISINE_OPTIONS.some((option) => option.value === normalized) ? (normalized as CuisineType) : '';
 }
 
-function cuisineLabel(cuisine: CuisineType | ''): string {
+type SelectedCuisine = CuisineType | 'all' | '';
+
+function normalizeSelectedCuisine(cuisine: unknown): SelectedCuisine {
+  const normalized = String(cuisine ?? '').trim().toLowerCase();
+  if (normalized === 'all') {
+    return 'all';
+  }
+
+  return normalizeCuisine(normalized);
+}
+
+function cuisineLabel(cuisine: SelectedCuisine): string {
+  if (cuisine === 'all') {
+    return 'All cuisines';
+  }
+
   return CUISINE_OPTIONS.find((option) => option.value === cuisine)?.label ?? 'Cuisine';
 }
 
@@ -369,7 +384,7 @@ export default function Recipes() {
   const [peopleCount, setPeopleCount] = useState(1);
   const [cookingRecipeKey, setCookingRecipeKey] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedCuisine, setSelectedCuisine] = useState<CuisineType | ''>('');
+  const [selectedCuisine, setSelectedCuisine] = useState<SelectedCuisine>('');
   const [loadingAction, setLoadingAction] = useState<'db' | 'generate' | null>(null);
   const recipesPerPage = 3;
 
@@ -407,7 +422,8 @@ export default function Recipes() {
   }, [cooldownSeconds]);
 
   const canLoadFromDb = inventoryNames.length > 0 && selectedCuisine !== '' && !isLoading;
-  const canGenerate = inventoryNames.length > 0 && selectedCuisine !== '' && !isLoading && cooldownSeconds === 0;
+  const canGenerate =
+    inventoryNames.length > 0 && selectedCuisine !== '' && selectedCuisine !== 'all' && !isLoading && cooldownSeconds === 0;
 
   const parseRetryAfterSeconds = (message: string): number | null => {
     const match = message.match(/retry after\s+(\d+)s/i);
@@ -432,7 +448,7 @@ export default function Recipes() {
     setLoadingAction('db');
 
     try {
-      const savedRecipesResponse = await api.getMatchingRecipes(selectedCuisine);
+      const savedRecipesResponse = await api.getMatchingRecipes(selectedCuisine === 'all' ? undefined : selectedCuisine);
       const savedRecipes = Array.isArray(savedRecipesResponse?.recipes)
         ? normalizeRecipesForDisplay(savedRecipesResponse.recipes)
         : [];
@@ -441,7 +457,11 @@ export default function Recipes() {
         setRecipes([]);
         setRecipeSourceMode('database');
         setCurrentPage(1);
-        setError(`No ${cuisineLabel(selectedCuisine)} recipes found in database. Try Generate New Recipes.`);
+        setError(
+          selectedCuisine === 'all'
+            ? 'No recipes found in database. Try Generate New Recipes for a specific cuisine.'
+            : `No ${cuisineLabel(selectedCuisine)} recipes found in database. Try Generate New Recipes.`
+        );
         return;
       }
 
@@ -467,6 +487,14 @@ export default function Recipes() {
     if (!selectedCuisine) {
       setError('Please choose a cuisine first.');
       setIsLoading(false);
+      setLoadingAction(null);
+      return;
+    }
+
+    if (selectedCuisine === 'all') {
+      setError('Please choose a specific cuisine to generate new recipes.');
+      setIsLoading(false);
+      setLoadingAction(null);
       return;
     }
 
@@ -594,7 +622,9 @@ export default function Recipes() {
       setInventoryItems(items);
       setInventoryNames(items.map((item) => item.name).filter(Boolean));
 
-      const matchingResponse = await api.getMatchingRecipes(selectedCuisine || undefined);
+      const matchingResponse = await api.getMatchingRecipes(
+        selectedCuisine && selectedCuisine !== 'all' ? selectedCuisine : undefined
+      );
       const matchingRecipes = Array.isArray(matchingResponse?.recipes)
         ? normalizeRecipesForDisplay(matchingResponse.recipes)
         : [];
@@ -623,6 +653,10 @@ export default function Recipes() {
               : 0;
           return matchStats.totalIngredients >= 3 && matchStats.matchPercentage >= activeThreshold;
         })
+        .map((entry, displayIndex) => ({
+          ...entry,
+          displayIndex,
+        }))
     : [];
 
   const totalPages = Math.ceil(filteredRecipes.length / recipesPerPage);
@@ -648,7 +682,7 @@ export default function Recipes() {
             <Form.Select
               value={selectedCuisine}
               onChange={(event) => {
-                setSelectedCuisine(normalizeCuisine(event.target.value));
+                setSelectedCuisine(normalizeSelectedCuisine(event.target.value));
                 setRecipes(null);
                 setRecipeSourceMode('generated');
                 setCurrentPage(1);
@@ -657,6 +691,7 @@ export default function Recipes() {
               }}
             >
               <option value="">Choose cuisine</option>
+              <option value="all">All cuisine</option>
               {CUISINE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -740,7 +775,7 @@ export default function Recipes() {
             </Alert>
           )}
           <Row className="mt-3 g-3">
-            {paginatedRecipes.map(({ recipe, recipeIndex, matchStats }) => {
+            {paginatedRecipes.map(({ recipe, recipeIndex, matchStats, displayIndex }) => {
                 const recipeType = normalizeRecipeType(recipe.type);
                 const meta = cardMeta[recipeType];
                 const recipeKey = `${recipe.type}-${recipe.title}-${recipeIndex}`;
@@ -754,7 +789,7 @@ export default function Recipes() {
                     <Card className="recipe-card themed-card h-100">
                       <Card.Body>
                         <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                          <Card.Title className="mb-0">Recipe Card {recipeIndex + 1}</Card.Title>
+                          <Card.Title className="mb-0">Recipe Card {displayIndex + 1}</Card.Title>
                           <div className="d-flex gap-2 flex-wrap justify-content-end">
                             <Badge bg="secondary" className="pill-badge">{meta.tag}</Badge>
                             {recipe.cuisine && (
