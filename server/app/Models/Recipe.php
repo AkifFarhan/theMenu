@@ -10,6 +10,7 @@ class Recipe extends Model
 
     protected $fillable = [
         'recipe_type',
+        'cuisine',
         'title',
         'preparation_time',
         'base_servings',
