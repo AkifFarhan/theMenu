@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button, Form, Card, Container, Alert } from 'react-bootstrap';
-import ApiClient from '../api';
 import toast from 'react-hot-toast';
-
-const api = new ApiClient();
+import { useAuth } from '../contexts/AuthContext';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -12,6 +10,7 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,8 +18,8 @@ const Login: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await api.login(email, password);
-      toast.success(response.message || 'Login successful!');
+      await login(email, password);
+      toast.success('Login successful!');
       navigate('/');
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'Login failed. Please try again.';
