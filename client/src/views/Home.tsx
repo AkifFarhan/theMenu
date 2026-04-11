@@ -23,14 +23,19 @@ export default function Home() {
       setError(null);
 
       try {
-        const [summaryResponse, meResponse] = await Promise.all([
+        const [summaryResponse, meResponse, matchingRecipesResponse] = await Promise.all([
           api.getDashboardSummary(),
           api.getMe(),
+          api.getMatchingRecipes(),
         ]);
+
+        const recipesReady = Array.isArray(matchingRecipesResponse?.recipes)
+          ? matchingRecipesResponse.recipes.length
+          : Number(summaryResponse.recipesReady || 0);
 
         setSummary({
           inventoryCount: Number(summaryResponse.inventoryCount || 0),
-          recipesReady: Number(summaryResponse.recipesReady || 0),
+          recipesReady,
         });
         setUserName(meResponse?.user?.username || 'Chef');
       } catch (err: unknown) {
