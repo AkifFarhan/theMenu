@@ -31,6 +31,8 @@ export default function AddFood() {
   const [editId, setEditId] = useState<number | null>(null);
   const [editData, setEditData] = useState<Partial<FoodItem>>({});
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   // Load ingredients on mount
   useEffect(() => {
@@ -132,6 +134,20 @@ export default function AddFood() {
       });
   };
 
+  // Pagination calculations
+  const totalPages = Math.ceil(items.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedItems = items.slice(startIndex, endIndex);
+
+  const handlePreviousPage = () => {
+    setCurrentPage((prev) => Math.max(prev - 1, 1));
+  };
+
+  const handleNextPage = () => {
+    setCurrentPage((prev) => Math.min(prev + 1, totalPages));
+  };
+
   return (
     <div className="add-food-wrapper">
       <div className="inventory-chip add-food-chip">Add Food</div>
@@ -166,6 +182,7 @@ export default function AddFood() {
                   placeholder="e.g. 500"
                   type="number"
                   step="0.01"
+                  min="0"
                 />
               </Form.Group>
 
@@ -203,7 +220,7 @@ export default function AddFood() {
               </tr>
             </thead>
             <tbody>
-              {items.map(it => (
+              {paginatedItems.map(it => (
                 <tr key={it.id}>
                   {editId === it.id ? (
                     <>
@@ -215,6 +232,7 @@ export default function AddFood() {
                           step="0.01"
                           value={editData.quantity}
                           onChange={e => setEditData(d => ({ ...d, quantity: e.target.value }))}
+                          min="0"
                         />
                       </td>
                       <td>{it.unit}</td>
@@ -247,6 +265,31 @@ export default function AddFood() {
               ))}
             </tbody>
           </Table>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && items.length > 0 && (
+            <div className="mt-3 d-flex gap-2 align-items-center justify-content-between">
+              <Button
+                variant="outline-secondary"
+                size="sm"
+                onClick={handlePreviousPage}
+                disabled={currentPage === 1}
+              >
+                ← Previous
+              </Button>
+              <span className="text-muted">
+                Page {currentPage} of {totalPages} ({items.length} total items)
+              </span>
+              <Button
+                variant="outline-secondary"
+                size="sm"
+                onClick={handleNextPage}
+                disabled={currentPage === totalPages}
+              >
+                Next →
+              </Button>
+            </div>
+          )}
 
           <div className="add-food-confirm">
             <span className="me-4">{items.length} item(s) added</span>
