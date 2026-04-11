@@ -284,6 +284,29 @@ class ApiClient {
     }
   }
 
+  async updateUser(data: { username: string; email: string }) {
+    try {
+      const response = await this.client.put('/api/me', data);
+      if (response.data?.user) {
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+      }
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+      throw error;
+    }
+  }
+
+  async changePassword(data: { current_password: string; new_password: string }) {
+    try {
+      const response = await this.client.post('/api/change-password', data);
+      return response.data;
+    } catch (error) {
+      this.handleError(error);
+      throw error;
+    }
+  }
+
   // Check if user is authenticated
   isAuthenticated(): boolean {
     return !!localStorage.getItem('auth_token');
@@ -315,3 +338,4 @@ class ApiClient {
 }
 
 export default ApiClient;
+export const apiClient = new ApiClient();
