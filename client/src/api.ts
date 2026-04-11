@@ -1,6 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 import { secrets } from './secrets';
 import toast from 'react-hot-toast';
+import type { CuisineType } from './services/recipeSuggestionService';
 
 type RecipeType = 'quick' | 'healthy' | 'surprise';
 
@@ -12,6 +13,7 @@ interface RecipePayloadIngredient {
 
 interface RecipePayload {
   type: RecipeType;
+  cuisine?: CuisineType;
   title: string;
   preparationTime: string;
   baseServings: 1;
@@ -82,9 +84,11 @@ class ApiClient {
     }
   }
 
-  async getMatchingRecipes() {
+  async getMatchingRecipes(cuisine?: CuisineType) {
     try {
-      const response = await this.client.get('/api/recipes/matching');
+      const response = await this.client.get('/api/recipes/matching', {
+        params: cuisine ? { cuisine } : undefined,
+      });
       return response.data;
     } catch (error) {
       this.handleError(error);

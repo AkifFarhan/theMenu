@@ -19,15 +19,18 @@ class RecipeController extends Controller
 {
     private array $staples = ['salt', 'water', 'oil'];
 
+    private array $cuisines = ['bengali', 'indian', 'chinese', 'italian', 'mexican'];
+
     private const DATABASE_MATCH_THRESHOLD = 70;
 
     private ?array $columnCache = null;
 
-    public function getMatchingRecipes()
+    public function getMatchingRecipes(Request $request)
     {
         try {
             $user = Auth::user();
             $this->ensureRecipeSchema();
+            $selectedCuisine = $this->normalizeCuisine($request->query('cuisine'));
 
             $inventoryItems = Inventory::query()
                 ->join('ingredients', 'ingredients.id', '=', 'inventories.ingredient_id')
@@ -45,6 +48,9 @@ class RecipeController extends Controller
                 ->select('recipes.*')
                 ->with(['recipeIngredients.ingredient', 'instructions'])
                 ->orderByDesc('recipes.id')
+                ->when($selectedCuisine !== null && $this->hasColumn('recipes', 'cuisine'), function ($query) use ($selectedCuisine) {
+                    $query->whereRaw('LOWER(recipes.cuisine) = ?', [$selectedCuisine]);
+                })
                 ->get();
 
             $matching = $recipes
@@ -237,6 +243,7 @@ class RecipeController extends Controller
         $validator = Validator::make($request->all(), [
             'recipes' => 'required|array|size:3',
             'recipes.*.type' => 'required|string|in:quick,healthy,surprise',
+            'recipes.*.cuisine' => 'nullable|string|in:bengali,indian,chinese,italian,mexican',
             'recipes.*.title' => 'required|string|max:200',
             'recipes.*.description' => 'nullable|string|max:1000',
             'recipes.*.preparationTime' => 'required|string|max:50',
@@ -274,6 +281,10 @@ class RecipeController extends Controller
 
                     if ($this->hasColumn('recipes', 'recipe_type')) {
                         $recipeData['recipe_type'] = $payloadRecipe['type'];
+                    }
+
+                    if ($this->hasColumn('recipes', 'cuisine')) {
+                        $recipeData['cuisine'] = $this->normalizeCuisine($payloadRecipe['cuisine'] ?? null);
                     }
 
                     if ($this->hasColumn('recipes', 'preparation_time')) {
@@ -391,6 +402,7 @@ class RecipeController extends Controller
         return [
             'id' => $recipe->id,
             'type' => $hasRecipeType ? $recipe->recipe_type : 'quick',
+            'cuisine' => $this->hasColumn('recipes', 'cuisine') ? (string) ($recipe->cuisine ?? '') : '',
             'title' => $recipe->title,
             'description' => (string) ($recipe->description ?? ''),
             'preparationTime' => $hasPreparationTime ? $recipe->preparation_time : '20 mins',
@@ -425,6 +437,7 @@ class RecipeController extends Controller
             return $provided;
         }
 
+        $cuisine = $this->normalizeCuisine($payloadRecipe['cuisine'] ?? null);
         $title = trim((string) ($payloadRecipe['title'] ?? 'Delicious recipe'));
         $prepTime = trim((string) ($payloadRecipe['preparationTime'] ?? '20 mins'));
 
@@ -439,6 +452,16 @@ class RecipeController extends Controller
         $ingredientText = count($ingredientNames) > 0
             ? implode(', ', $ingredientNames)
             : 'pantry staples';
+
+        $cuisinePrefix = '';
+        if ($cuisine !== null) {
+            $article = in_array(substr($cuisine, 0, 1), ['a', 'e', 'i', 'o', 'u'], true) ? 'an' : 'a';
+            $cuisinePrefix = $article . ' ' . ucfirst($cuisine) . ' style ';
+        }
+
+        if ($cuisinePrefix !== '') {
+            return "{$title} is {$cuisinePrefix}one-person {$prepTime} meal using {$ingredientText}.";
+        }
 
         return "{$title} is a one-person {$prepTime} meal using {$ingredientText}.";
     }
@@ -744,6 +767,11 @@ class RecipeController extends Controller
             $schemaChanged = true;
         }
 
+        if (!$this->hasColumn('recipes', 'cuisine')) {
+            DB::statement("ALTER TABLE recipes ADD cuisine NVARCHAR(20) NULL");
+            $schemaChanged = true;
+        }
+
         if (!$this->hasColumn('recipes', 'preparation_time')) {
             DB::statement("ALTER TABLE recipes ADD preparation_time NVARCHAR(50) NULL");
             DB::statement("UPDATE recipes SET preparation_time = '20 mins' WHERE preparation_time IS NULL");
@@ -793,6 +821,13 @@ class RecipeController extends Controller
         }
 
         return 'piece';
+    }
+
+    private function normalizeCuisine($cuisine): ?string
+    {
+        $normalized = strtolower(trim((string) $cuisine));
+
+        return in_array($normalized, $this->cuisines, true) ? $normalized : null;
     }
 
     private function normalizeToDatabaseMeasurement(float $amount, string $unit): ?array

@@ -1,6 +1,15 @@
 import { secrets } from '../secrets';
 
 export type RecipeType = 'quick' | 'healthy' | 'surprise';
+export type CuisineType = 'bengali' | 'indian' | 'chinese' | 'italian' | 'mexican';
+
+export const CUISINE_OPTIONS: Array<{ value: CuisineType; label: string }> = [
+  { value: 'bengali', label: 'Bengali' },
+  { value: 'indian', label: 'Indian' },
+  { value: 'chinese', label: 'Chinese' },
+  { value: 'italian', label: 'Italian' },
+  { value: 'mexican', label: 'Mexican' },
+];
 
 export interface RecipeIngredient {
   ingredientId?: number | null;
@@ -12,6 +21,7 @@ export interface RecipeIngredient {
 export interface GeneratedRecipe {
   id?: number;
   type: RecipeType;
+  cuisine?: CuisineType;
   title: string;
   description?: string;
   preparationTime: string;
@@ -33,6 +43,16 @@ interface RecipeResponse {
 }
 
 const RECIPE_TYPES: RecipeType[] = ['quick', 'healthy', 'surprise'];
+const DEFAULT_CUISINE: CuisineType = 'indian';
+
+function normalizeCuisine(cuisine: unknown, fallback?: CuisineType): CuisineType | undefined {
+  const normalized = String(cuisine ?? '').trim().toLowerCase();
+  if (CUISINE_OPTIONS.some((option) => option.value === normalized)) {
+    return normalized as CuisineType;
+  }
+
+  return fallback;
+}
 
 function extractJsonBlock(text: string): string {
   const fencedJsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/i);
@@ -245,7 +265,12 @@ function makeIngredient(item: string, unitPreference: 'g' | 'ml' | 'piece' | und
   return { item: name, amount: Math.max(1, Math.round(fallbackAmount / 50)), unit: 'piece' };
 }
 
-function buildRecipe(type: RecipeType, inventory: string[], preferredUnits: Map<string, 'g' | 'ml' | 'piece'>): GeneratedRecipe {
+function buildRecipe(
+  type: RecipeType,
+  inventory: string[],
+  preferredUnits: Map<string, 'g' | 'ml' | 'piece'>,
+  cuisine: CuisineType
+): GeneratedRecipe {
   const picks = inventory.slice(0, 5);
 
   const first = picks[0] ?? 'Mixed vegetables';
@@ -261,6 +286,7 @@ function buildRecipe(type: RecipeType, inventory: string[], preferredUnits: Map<
   if (type === 'quick') {
     return {
       type,
+      cuisine,
       title: `Quick ${first} Stir Fry`,
       description: `Fast pantry recipe centered on ${first}.`,
       preparationTime: '15 mins',
@@ -277,6 +303,7 @@ function buildRecipe(type: RecipeType, inventory: string[], preferredUnits: Map<
   if (type === 'healthy') {
     return {
       type,
+      cuisine,
       title: `${second} Power Bowl`,
       description: `Balanced one-person bowl with ${second} and ${third}.`,
       preparationTime: '20 mins',
@@ -292,6 +319,7 @@ function buildRecipe(type: RecipeType, inventory: string[], preferredUnits: Map<
 
   return {
     type,
+    cuisine,
     title: `Surprise ${third} Wrap`,
     description: `Creative wrap using ${third} and pantry staples.`,
     preparationTime: '25 mins',
@@ -307,7 +335,8 @@ function buildRecipe(type: RecipeType, inventory: string[], preferredUnits: Map<
 
 export async function getRecipesFromInventory(
   inventoryArray: string[],
-  inventoryUnitHints: Array<{ name: string; unit: string }> = []
+  inventoryUnitHints: Array<{ name: string; unit: string }> = [],
+  cuisine: CuisineType = DEFAULT_CUISINE
 ): Promise<RecipeResponse> {
   if (!Array.isArray(inventoryArray) || inventoryArray.length === 0) {
     throw new Error('Please add ingredients to your inventory first.');
@@ -322,6 +351,8 @@ export async function getRecipesFromInventory(
   }
 
   const preferredUnits = preferredUnitMap(inventoryUnitHints);
+  const normalizedCuisine = normalizeCuisine(cuisine, DEFAULT_CUISINE) ?? DEFAULT_CUISINE;
+  const cuisineLabel = CUISINE_OPTIONS.find((option) => option.value === normalizedCuisine)?.label ?? normalizedCuisine;
 
   const ingredients = cleanedInventory.join(', ');
   const unitHintText = inventoryUnitHints
@@ -336,7 +367,7 @@ export async function getRecipesFromInventory(
   const prompt = `I have these ingredients: ${ingredients}.
 Role: You are a Culinary Data Engineer Agent.
 
-Task: Based on the provided ingredient list, suggest 3 distinct recipes classified as quick, healthy, and surprise.
+Task: Based on the provided ingredient list, suggest 3 distinct recipes classified as quick, healthy, and surprise with a ${cuisineLabel} cuisine focus.
 
 Core Logic Rules:
 - The Single-Person Rule is mandatory: calculate all ingredient measurements for exactly one person.
@@ -347,12 +378,14 @@ Core Logic Rules:
 - Pantry matching is mandatory: use only provided inventory ingredients, but common staples (salt, water, oil) are allowed.
 - Structure is mandatory: each recipe must have exactly 3 concise steps.
 - Instruction text may use user-friendly wording and convenient kitchen measurements for readability.
+- Set the cuisine field on every recipe to "${normalizedCuisine}".
 
 Respond with ONLY valid JSON in this exact structure:
 {
   "recipes": [
     {
       "type": "quick",
+      "cuisine": "${normalizedCuisine}",
       "title": "",
       "description": "",
       "preparationTime": "15 mins",
@@ -364,6 +397,7 @@ Respond with ONLY valid JSON in this exact structure:
     },
     {
       "type": "healthy",
+      "cuisine": "${normalizedCuisine}",
       "title": "",
       "description": "",
       "preparationTime": "20 mins",
@@ -375,6 +409,7 @@ Respond with ONLY valid JSON in this exact structure:
     },
     {
       "type": "surprise",
+      "cuisine": "${normalizedCuisine}",
       "title": "",
       "description": "",
       "preparationTime": "25 mins",
@@ -417,6 +452,7 @@ Respond with ONLY valid JSON in this exact structure:
 
         recipeByType.set(type, {
           type,
+          cuisine: normalizeCuisine(match.cuisine, normalizedCuisine) ?? normalizedCuisine,
           title: String(match.title ?? `${type} recipe`).trim() || `${type} recipe`,
           description: String(match.description ?? '').trim() || `${type} recipe for one person.`,
           preparationTime: String(match.preparationTime ?? '20 mins').trim() || '20 mins',
@@ -429,7 +465,9 @@ Respond with ONLY valid JSON in this exact structure:
       }
     }
 
-    const recipes = RECIPE_TYPES.map((type) => recipeByType.get(type) ?? buildRecipe(type, cleanedInventory, preferredUnits));
+    const recipes = RECIPE_TYPES.map(
+      (type) => recipeByType.get(type) ?? buildRecipe(type, cleanedInventory, preferredUnits, normalizedCuisine)
+    );
     return { recipes };
   } catch (error: unknown) {
     if (error instanceof Error) {

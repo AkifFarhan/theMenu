@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Alert, Badge, Button, Card, Col, Form, Row, Spinner } from 'react-bootstrap';
 import toast from 'react-hot-toast';
-import { getRecipesFromInventory, type GeneratedRecipe } from '../services/recipeSuggestionService';
+import {
+  CUISINE_OPTIONS,
+  getRecipesFromInventory,
+  type CuisineType,
+  type GeneratedRecipe,
+} from '../services/recipeSuggestionService';
 import ApiClient from '../api';
 
 interface Item {
@@ -32,6 +37,15 @@ type RecipeTypeKey = keyof typeof cardMeta;
 const STAPLES = new Set(['salt', 'water', 'oil']);
 const GENERATED_MATCH_THRESHOLD = 100;
 const DATABASE_MATCH_THRESHOLD = 70;
+
+function normalizeCuisine(cuisine: unknown): CuisineType | '' {
+  const normalized = String(cuisine ?? '').trim().toLowerCase();
+  return CUISINE_OPTIONS.some((option) => option.value === normalized) ? (normalized as CuisineType) : '';
+}
+
+function cuisineLabel(cuisine: CuisineType | ''): string {
+  return CUISINE_OPTIONS.find((option) => option.value === cuisine)?.label ?? 'Cuisine';
+}
 
 function formatAmount(amount: number): string {
   return Number.isInteger(amount) ? amount.toString() : amount.toFixed(2).replace(/\.00$/, '');
@@ -227,14 +241,16 @@ function getRecipeCookability(recipe: GeneratedRecipe, inventoryItems: Item[], p
   };
 }
 
-function localFallbackRecipes(items: string[]): GeneratedRecipe[] {
+function localFallbackRecipes(items: string[], cuisine: CuisineType): GeneratedRecipe[] {
   const base = items.slice(0, 4);
   const core = base.length > 0 ? base.join(', ') : 'pantry staples';
+  const cuisineTitle = cuisineLabel(cuisine);
 
   return [
     {
       type: 'quick',
-      title: `Fast Skillet with ${base[0] || 'Pantry Mix'}`,
+      cuisine,
+      title: `${cuisineTitle} Fast Skillet with ${base[0] || 'Pantry Mix'}`,
       preparationTime: '15 mins',
       baseServings: 1,
       ingredients: [
@@ -250,7 +266,8 @@ function localFallbackRecipes(items: string[]): GeneratedRecipe[] {
     },
     {
       type: 'healthy',
-      title: `${base[1] || 'Veggie'} Power Bowl`,
+      cuisine,
+      title: `${cuisineTitle} ${base[1] || 'Veggie'} Power Bowl`,
       preparationTime: '20 mins',
       baseServings: 1,
       ingredients: [
@@ -266,7 +283,8 @@ function localFallbackRecipes(items: string[]): GeneratedRecipe[] {
     },
     {
       type: 'surprise',
-      title: `Creative ${base[2] || 'Kitchen'} Wrap`,
+      cuisine,
+      title: `${cuisineTitle} Creative ${base[2] || 'Kitchen'} Wrap`,
       preparationTime: '25 mins',
       baseServings: 1,
       ingredients: [
@@ -325,6 +343,10 @@ function normalizeRecipesForDisplay(recipes: unknown[]): GeneratedRecipe[] {
       return {
         id: typeof raw.id === 'number' ? raw.id : undefined,
         type: normalizeRecipeType(raw.type),
+        cuisine: (() => {
+          const normalizedCuisine = normalizeCuisine(raw.cuisine);
+          return normalizedCuisine || undefined;
+        })(),
         title: String(raw.title ?? 'Untitled recipe'),
         preparationTime: String(raw.preparationTime ?? '20 mins'),
         baseServings: 1,
@@ -347,6 +369,8 @@ export default function Recipes() {
   const [peopleCount, setPeopleCount] = useState(1);
   const [cookingRecipeKey, setCookingRecipeKey] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedCuisine, setSelectedCuisine] = useState<CuisineType | ''>('');
+  const [loadingAction, setLoadingAction] = useState<'db' | 'generate' | null>(null);
   const recipesPerPage = 3;
 
   useEffect(() => {
@@ -361,22 +385,6 @@ export default function Recipes() {
               .filter((name: string | undefined): name is string => Boolean(name))
           : [];
         setInventoryNames(names);
-
-        if (names.length > 0) {
-          try {
-            const savedRecipesResponse = await api.getMatchingRecipes();
-            const savedRecipes = Array.isArray(savedRecipesResponse?.recipes)
-              ? normalizeRecipesForDisplay(savedRecipesResponse.recipes)
-              : [];
-
-            if (savedRecipes.length > 0) {
-              setRecipes(savedRecipes);
-              setRecipeSourceMode('database');
-            }
-          } catch {
-            // Keep page usable if saved recipe lookup fails.
-          }
-        }
       } catch {
         setInventoryItems([]);
         setInventoryNames([]);
@@ -398,7 +406,8 @@ export default function Recipes() {
     return () => window.clearInterval(timer);
   }, [cooldownSeconds]);
 
-  const canGenerate = inventoryNames.length > 0 && !isLoading && cooldownSeconds === 0;
+  const canLoadFromDb = inventoryNames.length > 0 && selectedCuisine !== '' && !isLoading;
+  const canGenerate = inventoryNames.length > 0 && selectedCuisine !== '' && !isLoading && cooldownSeconds === 0;
 
   const parseRetryAfterSeconds = (message: string): number | null => {
     const match = message.match(/retry after\s+(\d+)s/i);
@@ -410,28 +419,81 @@ export default function Recipes() {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
   };
 
+  const handleLoadFromDb = async () => {
+    setError(null);
+    setSuccessMessage(null);
+
+    if (!selectedCuisine) {
+      setError('Please choose a cuisine first.');
+      return;
+    }
+
+    setIsLoading(true);
+    setLoadingAction('db');
+
+    try {
+      const savedRecipesResponse = await api.getMatchingRecipes(selectedCuisine);
+      const savedRecipes = Array.isArray(savedRecipesResponse?.recipes)
+        ? normalizeRecipesForDisplay(savedRecipesResponse.recipes)
+        : [];
+
+      if (savedRecipes.length === 0) {
+        setRecipes([]);
+        setRecipeSourceMode('database');
+        setCurrentPage(1);
+        setError(`No ${cuisineLabel(selectedCuisine)} recipes found in database. Try Generate New Recipes.`);
+        return;
+      }
+
+      setRecipes(savedRecipes);
+      setRecipeSourceMode('database');
+      setCurrentPage(1);
+      setSuccessMessage(`Loaded ${cuisineLabel(selectedCuisine)} recipes from the database.`);
+    } catch {
+      setError('Failed to load recipes from database right now.');
+    } finally {
+      setIsLoading(false);
+      setLoadingAction(null);
+    }
+  };
+
   const handleGenerate = async () => {
     setError(null);
     setSuccessMessage(null);
     setCooldownSeconds(5);
     setIsLoading(true);
+    setLoadingAction('generate');
+
+    if (!selectedCuisine) {
+      setError('Please choose a cuisine first.');
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const generated = await getRecipesFromInventory(
         inventoryNames,
-        inventoryItems.map((item) => ({ name: item.name, unit: item.unit }))
+        inventoryItems.map((item) => ({ name: item.name, unit: item.unit })),
+        selectedCuisine
       );
 
       try {
-        const savedResponse = await api.saveGeneratedRecipes(generated.recipes);
+        const payloadWithCuisine = generated.recipes.map((recipe) => ({
+          ...recipe,
+          cuisine: selectedCuisine,
+        }));
+        const savedResponse = await api.saveGeneratedRecipes(payloadWithCuisine);
         const savedRecipes = Array.isArray(savedResponse?.recipes)
           ? normalizeRecipesForDisplay(savedResponse.recipes)
           : normalizeRecipesForDisplay(generated.recipes);
         setRecipes(savedRecipes);
         setRecipeSourceMode('generated');
+        setCurrentPage(1);
+        setSuccessMessage(`Generated new ${cuisineLabel(selectedCuisine)} recipes.`);
       } catch (saveErr: unknown) {
         setRecipes(normalizeRecipesForDisplay(generated.recipes));
         setRecipeSourceMode('generated');
+        setCurrentPage(1);
 
         const typedSaveError = saveErr as {
           response?: { data?: { message?: string; error?: string } };
@@ -455,9 +517,10 @@ export default function Recipes() {
         } else {
           setCooldownSeconds(30);
         }
-        const fallbackRecipes = localFallbackRecipes(inventoryNames);
+        const fallbackRecipes = localFallbackRecipes(inventoryNames, selectedCuisine);
         setRecipes(normalizeRecipesForDisplay(fallbackRecipes));
         setRecipeSourceMode('fallback');
+        setCurrentPage(1);
         setError(
           retryAfter !== null
             ? `Rate limit reached. Please wait ${retryAfter}s, then try again. Showing local fallback recipes.`
@@ -470,17 +533,19 @@ export default function Recipes() {
       ) {
         const retryAfter = parseRetryAfterSeconds(message) ?? 30;
         setCooldownSeconds(Math.max(retryAfter, 10));
-        const fallbackRecipes = localFallbackRecipes(inventoryNames);
+        const fallbackRecipes = localFallbackRecipes(inventoryNames, selectedCuisine);
         setRecipes(normalizeRecipesForDisplay(fallbackRecipes));
         setRecipeSourceMode('fallback');
+        setCurrentPage(1);
         setError(`Gemini is busy right now. Please wait ${retryAfter}s and try again. Showing local fallback recipes.`);
       } else if (
         message.toLowerCase().includes('unexpected format') ||
         message.toLowerCase().includes('json')
       ) {
-        const fallbackRecipes = localFallbackRecipes(inventoryNames);
+        const fallbackRecipes = localFallbackRecipes(inventoryNames, selectedCuisine);
         setRecipes(normalizeRecipesForDisplay(fallbackRecipes));
         setRecipeSourceMode('fallback');
+        setCurrentPage(1);
         setError('Recipe service returned an unexpected format. Showing local fallback recipes for now.');
       } else if (
         message.includes('403') ||
@@ -488,18 +553,21 @@ export default function Recipes() {
         message.toLowerCase().includes('permission') ||
         message.toLowerCase().includes('leaked')
       ) {
-        const fallbackRecipes = localFallbackRecipes(inventoryNames);
+        const fallbackRecipes = localFallbackRecipes(inventoryNames, selectedCuisine);
         setRecipes(normalizeRecipesForDisplay(fallbackRecipes));
         setRecipeSourceMode('fallback');
+        setCurrentPage(1);
         setError(`${message} Showing local fallback recipes for now.`);
       } else {
-        const fallbackRecipes = localFallbackRecipes(inventoryNames);
+        const fallbackRecipes = localFallbackRecipes(inventoryNames, selectedCuisine);
         setRecipes(normalizeRecipesForDisplay(fallbackRecipes));
         setRecipeSourceMode('fallback');
+        setCurrentPage(1);
         setError(`${message} Showing local fallback recipes for now.`);
       }
     } finally {
       setIsLoading(false);
+      setLoadingAction(null);
     }
   };
 
@@ -526,7 +594,7 @@ export default function Recipes() {
       setInventoryItems(items);
       setInventoryNames(items.map((item) => item.name).filter(Boolean));
 
-      const matchingResponse = await api.getMatchingRecipes();
+      const matchingResponse = await api.getMatchingRecipes(selectedCuisine || undefined);
       const matchingRecipes = Array.isArray(matchingResponse?.recipes)
         ? normalizeRecipesForDisplay(matchingResponse.recipes)
         : [];
@@ -575,6 +643,27 @@ export default function Recipes() {
       <div className="d-flex align-items-center justify-content-between gap-2 page-heading-row">
         <div className="inventory-chip">Matchmaker Results</div>
         <div className="d-flex align-items-end gap-2">
+          <Form.Group controlId="cuisine" className="mb-0">
+            <Form.Label className="mb-1">Cuisine</Form.Label>
+            <Form.Select
+              value={selectedCuisine}
+              onChange={(event) => {
+                setSelectedCuisine(normalizeCuisine(event.target.value));
+                setRecipes(null);
+                setRecipeSourceMode('generated');
+                setCurrentPage(1);
+                setSuccessMessage(null);
+                setError(null);
+              }}
+            >
+              <option value="">Choose cuisine</option>
+              {CUISINE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Form.Select>
+          </Form.Group>
           <Form.Group controlId="peopleCount" className="mb-0">
             <Form.Label className="mb-1">Cooking For</Form.Label>
             <Form.Control
@@ -588,8 +677,11 @@ export default function Recipes() {
               }}
             />
           </Form.Group>
+          <Button variant="outline-secondary" disabled={!canLoadFromDb} onClick={handleLoadFromDb}>
+            Load From DB
+          </Button>
           <Button className="btn-navy" disabled={!canGenerate} onClick={handleGenerate}>
-            Generate Recipes
+            Generate New Recipes
           </Button>
         </div>
       </div>
@@ -607,7 +699,9 @@ export default function Recipes() {
       {isLoading && (
         <Alert variant="info" className="mt-3 d-flex align-items-center gap-2 mb-0">
           <Spinner animation="border" size="sm" />
-          Building recipe suggestions from your pantry...
+          {loadingAction === 'db'
+            ? `Loading ${selectedCuisine ? cuisineLabel(selectedCuisine) : ''} recipes from database...`
+            : `Building ${selectedCuisine ? cuisineLabel(selectedCuisine) : ''} recipe suggestions from your pantry...`}
         </Alert>
       )}
 
@@ -661,7 +755,14 @@ export default function Recipes() {
                       <Card.Body>
                         <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
                           <Card.Title className="mb-0">Recipe Card {recipeIndex + 1}</Card.Title>
-                          <Badge bg="secondary" className="pill-badge">{meta.tag}</Badge>
+                          <div className="d-flex gap-2 flex-wrap justify-content-end">
+                            <Badge bg="secondary" className="pill-badge">{meta.tag}</Badge>
+                            {recipe.cuisine && (
+                              <Badge bg="dark" className="pill-badge">
+                                {cuisineLabel(recipe.cuisine)}
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                         <div className="mt-2 d-flex gap-2 align-items-center">
                           <Badge bg={matchPercentage === 100 ? 'success' : matchPercentage >= 80 ? 'info' : 'warning'}>
