@@ -7,6 +7,7 @@ import Recipes from './views/Recipes';
 import Profile from './views/Profile';
 import Login from './views/Login';
 import Register from './views/Register';
+import Contact from './views/Contact';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './index.css';
 import { Toaster } from 'react-hot-toast';
@@ -42,6 +43,7 @@ function App() {
           />
           <Route path={'/sessions'} element={<Sessions />} />
           <Route path={'/profile'} element={<Profile />} />
+          <Route path={'/contact'} element={<Contact />} />
         </Route>
       </Routes>
       <Toaster
